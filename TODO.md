@@ -16,9 +16,8 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 ## 21 Ekim — uçtan uca ince dilim
 
 - [x] Klasör yapısı: `apps/web`, `services/api`, `src/{workflow,agents,domain,contracts}`, `scenarios`, `evals`, `docs`, `infra`.
-- [ ] Deterministik reducer (skor `initial_score` + goller) ve snapshot (`sequence` watermark).
-- [ ] Pencereli metrikler (pas isabeti, baskı sayısı, top kazanımı, şut) — sürümlü, event ID'li.
-- [ ] Replay API, skor, şablon kart.
+- [x] Deterministik snapshot/skor, pencereli metrikler (`metrics-v1`), şablon kartlar (gol, baskı), salt-okunur replay API (175 test).
+- [x] Web replay: saha, kontroller, skor, kartlar + kanıt, metrik tablosu (48 test) ve Playwright e2e (9 akış, gerçek API).
 - [ ] Football MCP fixture'daki dört fonksiyonu gerçek veri katmanına taşı (önce doğrudan fonksiyon, MCP adaptörü sonra). Mevcut 11 test sözleşme testi olarak korunur.
 
 ## 22 Ekim — agentlar
@@ -56,6 +55,15 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 
 - [ ] Son kontrol: public repo + video linki, secret taraması, seed tekrar üretimi, jüri erişimi.
 - [ ] Teslim; 28 Ekim 09:59 sınırına tampon bırak.
+
+## Backlog (inceleme notları, engelleyici değil)
+
+- Baskı kartı eşiğe tam eşit tetikleniyor (6/10 = 0,6); senaryo yeniden üretilirse 2060–2062'ye kayabilir.
+- Backend testleri 0,5 sn → 9 sn (kartlar her sequence için API'den çağrılıyor); gerekirse örnekle.
+- `fixes2.test.tsx` "past the watermark" testi ara durumu da doğrulamalı (t≈160 ms'de snapshot null).
+- Boş `p[role=status]` skor çubuğunda sıfır boyutlu öğe olarak gap'e katılıyor.
+- `useAnalysis`: bekleyen trailing timer varken `matchId` değişirse eski closure çalışır (bugün erişilemez).
+- Starlette TestClient `httpx2` uyarısı.
 
 ## Kapsam dışı (zaman kalırsa)
 

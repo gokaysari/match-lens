@@ -18,4 +18,16 @@ All match data in this repository is synthetic. This is not an official Microsof
 | `infra` | Deployment |
 | `mcp-tests` | MCP prototype and integration checks (see its README) |
 
-Status: scaffolding only. See `TODO.md` for the plan.
+## Run locally
+
+Requirements: Python 3.12, Node 26.
+
+```sh
+/opt/homebrew/bin/python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+.venv/bin/uvicorn app:app --app-dir services/api --host 127.0.0.1 --port 8000   # API
+cd apps/web && npm ci && npm run dev                                             # UI on http://127.0.0.1:5173
+```
+
+Tests: `.venv/bin/pytest -q` (backend), `npm test` / `npm run typecheck` (web, in `apps/web`), `npm run e2e` (Playwright against the real API; first run `npx playwright install chromium`).
+
+Status: deterministic replay slice (synthetic scenario, score, window metrics, template cards, web replay). LLM agents not built yet. See `TODO.md`.
