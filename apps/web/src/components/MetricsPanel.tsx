@@ -1,7 +1,7 @@
 import type { ScenarioMeta, WindowMetrics } from "../api/types";
 import { NO_VALUE, formatMetric, humanize } from "../lib/format";
 
-export function MetricsPanel({ metrics, meta }: { metrics: WindowMetrics | null; meta: ScenarioMeta }) {
+export function MetricsPanel({ metrics, meta, sincePeriodStart }: { metrics: WindowMetrics | null; meta: ScenarioMeta; sincePeriodStart: boolean }) {
   if (!metrics) {
     return (
       <section className="panel" aria-labelledby="metrics-h">
@@ -15,7 +15,7 @@ export function MetricsPanel({ metrics, meta }: { metrics: WindowMetrics | null;
     <section className="panel" aria-labelledby="metrics-h">
       <h2 id="metrics-h">Metrics</h2>
       <table>
-        <caption>Last 60 s</caption>
+        <caption>{sincePeriodStart ? "Since period start" : "Last 60 s"}</caption>
         <thead>
           <tr>
             <th scope="col">Metric</th>

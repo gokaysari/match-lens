@@ -73,7 +73,7 @@ export interface EventPage {
 }
 
 export type MetricName =
-  | "passes_attempted" | "passes_completed" | "pass_completion" | "pressures"
+  | "passes_attempted" | "passes_completed" | "pass_completion" | "pressures" | "pressures_opp_half"
   | "ball_wins" | "high_ball_wins" | "shots" | "goals";
 
 export interface MetricValue {

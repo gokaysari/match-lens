@@ -5,7 +5,7 @@ import { CardsPanel } from "./components/CardsPanel";
 import { Controls } from "./components/Controls";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { Pitch } from "./components/Pitch";
-import { useAnalysis, useReplay, type AnalysisStatus } from "./hooks";
+import { seqOfSnapshotId, useAnalysis, useReplay } from "./hooks";
 import { NO_VALUE, mmss } from "./lib/format";
 
 type Loaded = { meta: ScenarioMeta; events: MatchEvent[] };
@@ -60,19 +60,24 @@ export default function App({ matchId = "synthetic-01" }: { matchId?: string }) 
   );
 }
 
-function statusText(s: AnalysisStatus): string {
-  if (s === "loading") return "Updating…";
-  if (s === "unavailable") return "Analysis unavailable";
-  return "";
-}
-
 function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
   const replay = useReplay(events);
   const current = events[replay.index]!;
   const analysis = useAnalysis(matchId, current.sequence);
   const home = meta.teams.find((t) => t.side === "home")!;
   const away = meta.teams.find((t) => t.side === "away")!;
-  const score = analysis.snapshot?.score;
+  // Never show analysis from past the watermark (e.g. after scrubbing backwards).
+  const snapshot =
+    analysis.snapshot && analysis.snapshot.watermark_seq <= current.sequence ? analysis.snapshot : null;
+  const metrics =
+    analysis.metrics && seqOfSnapshotId(analysis.metrics.snapshot_id) <= current.sequence
+      ? analysis.metrics
+      : null;
+  const score = snapshot?.score;
+  const announcement =
+    analysis.status === "unavailable" ? "Analysis unavailable" : analysis.recovered ? "Analysis restored" : "";
+  const periodStart = events.find((e) => e.period === current.period)!;
+  const sincePeriodStart = current.event_time_ms - periodStart.event_time_ms < 60000;
 
   return (
     <main>
@@ -90,8 +95,11 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
           <span aria-label="Period">{current.period}</span>
         </span>
         <p role="status" className="analysis-status" data-state={analysis.status}>
-          {statusText(analysis.status)}
+          {announcement}
         </p>
+        <span className="analysis-status" aria-hidden="true">
+          {analysis.status === "loading" ? "Updating…" : ""}
+        </span>
       </section>
       <div className="layout">
         <div className="left">
@@ -115,7 +123,7 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
             watermarkSeq={current.sequence}
             clockMs={current.event_time_ms}
           />
-          <MetricsPanel metrics={analysis.metrics} meta={meta} />
+          <MetricsPanel metrics={metrics} meta={meta} sincePeriodStart={sincePeriodStart} />
         </div>
       </div>
       <p className="muted small footer">

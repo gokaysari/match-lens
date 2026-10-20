@@ -5,10 +5,16 @@ export const TEAM_COLORS = { home: "#1d4ed8", away: "#c2410c" } as const;
 const TRAIL = 6;
 const ARROW_TYPES = new Set(["pass", "carry", "shot"]);
 
+const warned = new Set<string>();
+
+export function playerName(meta: ScenarioMeta, id: string): string {
+  return meta.players.find((p) => p.id === id)?.name ?? id;
+}
+
 export function describeEvent(e: MatchEvent, meta: ScenarioMeta): string {
   const team = meta.teams.find((t) => t.id === e.team_id)?.name ?? e.team_id;
-  const who = e.player_id ? `, ${e.player_id}` : "";
-  const to = e.recipient_player_id ? ` to ${e.recipient_player_id}` : "";
+  const who = e.player_id ? `, ${playerName(meta, e.player_id)}` : "";
+  const to = e.recipient_player_id ? ` to ${playerName(meta, e.recipient_player_id)}` : "";
   const outcome = e.outcome ? ` (${e.outcome.replace(/_/g, " ")})` : "";
   return `${mmss(e.event_time_ms)} ${team} ${e.type.replace(/_/g, " ")}${who}${to}${outcome}`;
 }
@@ -30,9 +36,19 @@ function PitchMarkings() {
 }
 
 export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: number; meta: ScenarioMeta }) {
-  const sideOf = (teamId: string) => meta.teams.find((t) => t.id === teamId)?.side ?? "home";
+  const sideOf = (teamId: string) => meta.teams.find((t) => t.id === teamId)?.side;
   const upTo = events.slice(0, index + 1);
-  const drawable = upTo.filter((e) => e.x !== null && e.y !== null).slice(-TRAIL);
+  const drawable = upTo
+    .filter((e) => {
+      if (e.x === null || e.y === null) return false;
+      if (sideOf(e.team_id)) return true;
+      if (!warned.has(e.team_id)) {
+        warned.add(e.team_id);
+        console.warn(`Pitch: skipping events of unknown team_id "${e.team_id}"`);
+      }
+      return false;
+    })
+    .slice(-TRAIL);
   const latest = events[index]!;
   return (
     <figure className="pitch">
@@ -55,7 +71,7 @@ export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: nu
         <g transform="translate(0,68) scale(1,-1)">
           <PitchMarkings />
           {drawable.map((e, i) => {
-            const side = sideOf(e.team_id);
+            const side = sideOf(e.team_id)!;
             const color = TEAM_COLORS[side];
             const isLatest = e === latest;
             const opacity = isLatest ? 1 : 0.35 + (0.4 * (i + 1)) / drawable.length;

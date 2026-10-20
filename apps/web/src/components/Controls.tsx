@@ -17,13 +17,13 @@ export function Controls({ index, last, clockMs, playing, speed, onIndex, onPlay
     <section className="controls" aria-label="Replay controls">
       <div className="control-row">
         <button type="button" aria-label="Step back" onClick={() => onIndex(index - 1)} disabled={index <= 0}>
-          <span aria-hidden="true">⏮ Back</span>
+          <span aria-hidden="true">⏮</span> Step back
         </button>
         <button type="button" onClick={() => onPlaying(!playing)} aria-label={playing ? "Pause" : "Play"}>
           <span aria-hidden="true">{playing ? "⏸" : "▶"}</span>
         </button>
         <button type="button" aria-label="Step forward" onClick={() => onIndex(index + 1)} disabled={index >= last}>
-          <span aria-hidden="true">Next ⏭</span>
+          Step forward <span aria-hidden="true">⏭</span>
         </button>
         <div className="speeds" role="group" aria-label="Playback speed">
           {SPEEDS.map((s) => (
