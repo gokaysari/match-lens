@@ -3,7 +3,7 @@
 import pytest
 from conftest import SCENARIO_DIR, base_event, base_meta
 
-from contracts.api import CardKind, MetricName
+from contracts.api import CardKind, CardList, MetricName
 from contracts.events import MatchEvent, ScenarioMeta
 from domain.cards import (
     GOAL_CARD_TTL_MS,
@@ -322,15 +322,21 @@ def test_pressures_opp_half_both_teams():
 
 def test_card_metric_equals_endpoint_metric_at_trigger(synth):
     meta, events = synth
-    card = next(c for c in compute_cards(meta, events, events[-1].sequence).cards
-                if c.kind == CardKind.press_surge)
-    wm = compute_window_metrics(meta, events, card.trigger_seq)
-    q = next(m for m in wm.metrics if m.name == MetricName.pressures_opp_half and m.team_id == "hba")
-    assert q in card.metrics
+    cards = [c for c in compute_cards(meta, events, events[-1].sequence).cards
+             if c.kind == CardKind.press_surge]
+    assert cards
+    for card in cards:
+        wm = compute_window_metrics(meta, events, card.trigger_seq)
+        quoted = {m.name: m for m in card.metrics}
+        assert set(quoted) == {MetricName.pressures_opp_half, MetricName.pass_completion}
+        for name, q in quoted.items():
+            assert q == metric(wm, name, q.team_id)
 
 
-def test_continuous_press_yields_one_card():
-    meta = ScenarioMeta.model_validate(base_meta(initial_score={"home": 0, "away": 0}))
+ZERO_META = ScenarioMeta.model_validate(base_meta(initial_score={"home": 0, "away": 0}))
+
+
+def continuous_press_events():
     events = [ev(i, 1000 * i, outcome="incomplete") for i in range(1, 6)]
     n = 5
     for k in range(1, 400):  # ~ 400 s of continuous pressing and failing passes
@@ -339,13 +345,18 @@ def test_continuous_press_yields_one_card():
         if k % 5 == 0:
             n += 1
             events.append(ev(n, 5000 + 1000 * k + 500, outcome="incomplete"))
+    return events
+
+
+def test_continuous_press_yields_one_card():
+    meta = ZERO_META
+    events = continuous_press_events()
     assert events[-1].event_time_ms > 5000 + 2 * PRESS_COOLDOWN_MS
     ids = [c.card_id for c in compute_cards(meta, events, events[-1].sequence).cards]
     assert len(ids) == 1
 
 
-def test_press_rearms_after_condition_false():
-    meta = ScenarioMeta.model_validate(base_meta(initial_score={"home": 0, "away": 0}))
+def rearm_events():
     events, n = [], 0
     for i in range(5):
         n += 1; events.append(ev(n, 1000 * n, outcome="incomplete"))
@@ -357,7 +368,12 @@ def test_press_rearms_after_condition_false():
         n += 1; events.append(ev(n, base + 10 * i, outcome="incomplete"))
     for k in range(10):
         n += 1; events.append(_pressure(n, base + 1000 + 10 * k))
-    assert len(compute_cards(meta, events, n).cards) == 2
+    return events
+
+
+def test_press_rearms_after_condition_false():
+    events = rearm_events()
+    assert len(compute_cards(ZERO_META, events, events[-1].sequence).cards) == 2
 
 
 def test_goal_card_evidence_includes_earlier_goals():
@@ -375,8 +391,42 @@ def test_goal_card_evidence_includes_earlier_goals():
 
 
 def test_cached_equals_uncached_for_every_sequence(synth):
+    from app import create_app
+    from fastapi.testclient import TestClient
+
     meta, events = synth
-    full = compute_cards(meta, events, events[-1].sequence)
+    client = TestClient(create_app(SCENARIO_DIR.parent))
     for e in events:
-        assert compute_cards(meta, events, e.sequence).cards == tuple(
+        r = client.get(f"/api/matches/synthetic-01/cards?at_seq={e.sequence}")
+        assert r.status_code == 200
+        assert CardList.model_validate(r.json()) == compute_cards(meta, events, e.sequence)
+
+
+@pytest.mark.parametrize("make", [continuous_press_events, rearm_events])
+def test_cached_equals_uncached_hand_built(make):
+    events = make()
+    full = compute_cards(ZERO_META, events, events[-1].sequence)
+    for e in events:
+        assert compute_cards(ZERO_META, events, e.sequence).cards == tuple(
             c for c in full.cards if c.trigger_seq <= e.sequence)
+
+
+# ---- press threshold boundaries ----------------------------------------------
+
+def press_cards(completed, attempts, pressures):
+    events = [ev(i, 1000 * i, outcome="complete" if i <= completed else "incomplete")
+              for i in range(1, attempts + 1)]
+    events += [_pressure(attempts + i, 1000 * (attempts + i)) for i in range(1, pressures + 1)]
+    return compute_cards(ZERO_META, events, events[-1].sequence).cards
+
+
+@pytest.mark.parametrize("completed,attempts,pressures,fires", [
+    (3, 5, 10, True),    # exactly 0.6 completion, exactly 10 pressures
+    (4, 6, 10, False),   # 0.667 completion
+    (3, 5, 9, False),    # one pressure short
+    (0, 4, 10, False),   # 4 attempts never fires
+    (1, 4, 12, False),
+])
+def test_press_threshold_boundaries(completed, attempts, pressures, fires):
+    cards = press_cards(completed, attempts, pressures)
+    assert [c.kind for c in cards] == ([CardKind.press_surge] if fires else [])

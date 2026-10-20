@@ -127,6 +127,15 @@ def test_refuses_broken_scenario_dir(tmp_path):
         create_app(tmp_path)
 
 
+def test_refuses_empty_scenario_dir(tmp_path):
+    d = tmp_path / "empty"
+    shutil.copytree(SCENARIO_DIR, d, ignore=shutil.ignore_patterns("__pycache__", "generate.py"))
+    (d / "events.jsonl").write_text("")
+    with pytest.raises(IngestError) as ei:
+        create_app(tmp_path)
+    assert ei.value.code == "EMPTY_SCENARIO"
+
+
 def test_env_scenarios_dir(monkeypatch):
     monkeypatch.setenv("MATCHLENS_SCENARIOS_DIR", str(ROOT / "scenarios"))
     assert TestClient(create_app()).get("/api/matches/synthetic-01/meta").status_code == 200
@@ -134,11 +143,11 @@ def test_env_scenarios_dir(monkeypatch):
 
 def test_405_carries_allow_header(client):
     r = client.post("/api/matches/synthetic-01/snapshot")
+    assert r.status_code == 405 and ApiError.model_validate(r.json()).code == "METHOD_NOT_ALLOWED"
     assert "GET" in r.headers.get("allow", "")
 
 
-def test_domain_error_mapping_and_internal(client):
-    from fastapi import FastAPI
+def test_domain_error_mapping_and_internal(client, caplog):
     from domain.errors import DomainError
     app = create_app(ROOT / "scenarios")
 
@@ -149,5 +158,9 @@ def test_domain_error_mapping_and_internal(client):
     c = TestClient(app, raise_server_exceptions=False)
     assert c.get("/boom/UNKNOWN_EVENT").status_code == 404
     assert c.get("/boom/FUTURE_EVENT_FORBIDDEN").status_code == 404
-    r = c.get("/boom/SOMETHING_NEW")
+    with caplog.at_level("ERROR"):
+        r = c.get("/boom/SOMETHING_NEW")
     assert r.status_code == 500 and ApiError.model_validate(r.json()).code == "INTERNAL"
+    assert "SOMETHING_NEW" not in r.text
+    assert any("SOMETHING_NEW" in rec.getMessage() and "x" in rec.getMessage()
+               for rec in caplog.records)

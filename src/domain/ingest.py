@@ -79,6 +79,8 @@ def load_scenario(directory: str | Path) -> tuple[ScenarioMeta, list[MatchEvent]
     d = Path(directory)
     meta = _load_meta(d / "meta.json")
     events = _parse_events(d / "events.jsonl")
+    if not events:
+        raise IngestError("EMPTY_SCENARIO", "events.jsonl contains no events")
 
     teams = {t.id for t in meta.teams}
     players = {p.id: p.team_id for p in meta.players}
