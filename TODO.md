@@ -22,9 +22,11 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 
 ## 22 Ekim — agentlar
 
-- [ ] Tactical Analyst, Evidence Editor, Audience Storyteller; Agent Framework workflow'u (state machine).
-- [ ] Typed devir artefact'ı (`run_id`, `snapshot_version`, `candidate_id`, `trace_id`, claims, review, overlay).
-- [ ] Tek-agent baseline (aynı model, metrik, kanıt paketi ve çıktı şeması).
+- [x] Agent sözleşmesi (`src/contracts/agents.py`) ve üç rol + deterministik koordinatör + kod denetimleri + sahte model (`src/agents`, `src/workflow`; 261 test).
+- [x] Tek-agent baseline yolu (`workflow/single_agent.py`), aynı denetimler.
+- [ ] Foundry `ModelClient` (azure-ai-projects 2.x, DefaultAzureCredential, env `FOUNDRY_PROJECT_ENDPOINT` / `FOUNDRY_MODEL_DEPLOYMENT`); katı structured output için şema uyarlaması; ret/content-filter ele alma.
+- [ ] Microsoft Agent Framework: koordinatörü MAF workflow olarak sarmak (hero teknoloji).
+- [ ] Insight'ları API'ye ve UI'a bağlamak (persona seçimi).
 
 ## 23 Ekim — UX ve hata toparlama
 
@@ -64,6 +66,8 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 - Boş `p[role=status]` skor çubuğunda sıfır boyutlu öğe olarak gap'e katılıyor.
 - `useAnalysis`: bekleyen trailing timer varken `matchId` değişirse eski closure çalışır (bugün erişilemez).
 - Starlette TestClient `httpx2` uyarısı.
+- Sayı denetimi sayının kaynağını doğruluyor, anlamını değil ("60 pressures" ← "60 s" penceresi geçer); anlam kontrolü Evidence Editor'da. Gerekirse sayı→metrik bağlama (claim içinde `{metric}` yer tutucuları).
+- Bilinen yanlış retler (nadir): "final third", "a one-two", "sixteen", "4-4-2", alıntılanmayan olay saatleri.
 
 ## Kapsam dışı (zaman kalırsa)
 
