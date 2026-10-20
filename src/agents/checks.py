@@ -26,8 +26,8 @@ _SAFE_ID = re.compile(r"[A-Za-z0-9_@/:.-]{1,32}")
 ONES = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
         "sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety").split()
 NUMBER_WORDS = tuple(w for w in ONES if w != "one") + (
-    "hundred", "half", "halves", "double", "doubled", "twice", "triple", "tripled", "third", "thirds",
-    "quarter", "quarters", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+    "hundred", "halves", "double", "doubled", "twice", "triple", "tripled", "third", "thirds",
+    "quarter", "quarters", "fourth", "fifth", "sixth", "seventh", "eighth",
     "ninth", "tenth")
 # "one" is common English ("no one", "one of"); it counts as a number word only before these nouns
 ONE_COUNTED_NOUNS = ("goal", "pass", "passes", "shot", "shots", "chance", "press", "pressure", "minute",
@@ -45,10 +45,43 @@ def numbers_in(text: str) -> list[float]:
     return [float(m.replace(",", "").replace("\u2212", "-")) for m in _NUM.findall(text)]
 
 
-def number_words_in(text: str) -> list[str]:
+_HALF = re.compile(r"\bhalf\b", re.I)
+_HALF_BEFORE_FRACTION = {"a", "by", "one"}
+_HALF_FOLLOW_FRACTION = {"of", "the", "as", "their", "his", "her", "its"}
+_HALF_PITCH_BEFORE = {"first", "second", "own", "other", "opposite", "opposing", "opponent"}
+
+
+def _fraction_half(text: str) -> list[str]:
+    """'half' as a fraction ('half of the passes', 'a half', 'by half'); pitch/period halves are fine."""
+    out = []
+    for m in _HALF.finditer(text):
+        prev = re.search(r"([\w']+)\s*$", text[: m.start()])
+        nxt = re.match(r"\s+(\w+)", text[m.end():])
+        before = prev.group(1).lower() if prev else ""
+        after = nxt.group(1).lower() if nxt else ""
+        if before in _HALF_BEFORE_FRACTION or (
+            after in _HALF_FOLLOW_FRACTION and before not in _HALF_PITCH_BEFORE and not before.endswith("'s")
+        ):
+            out.append("half")
+    return out
+
+
+def number_words_in(text: str, allowed: frozenset[str] = frozenset()) -> list[str]:
     found = [(m.group(1) or m.group(2)).lower() for m in _WORD.finditer(text)]
     found += [m.group(1).lower() for m in _ONE.finditer(text)]
-    return found
+    found += _fraction_half(text)
+    return [w for w in found if w not in allowed]
+
+
+def card_words(candidate: MomentCandidate) -> frozenset[str]:
+    """Number words the deterministic source card itself uses are allowed in agent text."""
+    card = candidate.source_card
+    return frozenset(w.lower() for w in re.findall(r"[A-Za-z0-9]+", card.title + " " + card.body))
+
+
+def trigger_clock(candidate: MomentCandidate) -> tuple[int, int]:
+    s = candidate.trigger_clock_ms // 1000
+    return (s // 60, s % 60)
 
 
 def _strip_cited_clocks(text: str, clocks: set[tuple[int, int]]) -> str:
@@ -103,6 +136,7 @@ def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: Eviden
     by_id = {e.event_id: e for e in bundle.events}
     metrics = {(m.name, m.team_id): m for m in bundle.metrics}
     card_nums = card_numbers(candidate)
+    words = card_words(candidate)
     seen: set[str] = set()
     for c in out.claims:
         cid = safe_id(c.claim_id)
@@ -110,7 +144,7 @@ def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: Eviden
             codes.append(f"DUPLICATE_CLAIM_ID:{cid}")
         seen.add(c.claim_id)
         allowed = set(card_nums)
-        clocks: set[tuple[int, int]] = set()
+        clocks: set[tuple[int, int]] = {trigger_clock(candidate)}
         for eid in c.evidence_event_ids:
             ev = by_id.get(eid)
             if ev is None:
@@ -129,7 +163,7 @@ def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: Eviden
         for n in numbers_in(_strip_cited_clocks(c.text, clocks)):
             if n not in allowed:
                 codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
-        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(c.text)]
+        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(c.text, words)]
     return _dedupe(codes)
 
 
@@ -175,6 +209,7 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
         elif counts[p] > 1:
             codes.append(f"DUPLICATE_PERSONA:{p.value}")
     card_nums = card_numbers(candidate)
+    words = card_words(candidate)
     bodies: dict[Persona, str] = {}
     for v in story.variants:
         bodies.setdefault(v.persona, v.body)
@@ -188,11 +223,11 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
             else:
                 allowed |= set(numbers_in(claim.text))
         shown = v.title + " " + v.body
-        nums = numbers_in(shown)
+        nums = numbers_in(_strip_cited_clocks(shown, {trigger_clock(candidate)}))
         for n in nums:
             if n not in allowed:
                 codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
-        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(shown)]
+        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(shown, words)]
         if any(ch in v.title + v.body for ch in "<>"):
             codes.append(f"MARKUP_FORBIDDEN:{v.persona.value}")
         if v.persona == Persona.casual and len(nums) > 1:

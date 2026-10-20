@@ -223,7 +223,7 @@ def test_partial_approval_publishes_only_approved(press):
     _, hw = model_for(cand, bundle)
     rej = rejecting(hw, {"c2"})
     story = copy.deepcopy(hw["storyteller"])
-    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's end."
+    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's half."
     for v in story["variants"]:
         v["claim_ids"] = ["c1"]
     m, _ = model_for(cand, bundle, analyst=[hw["analyst"], hw["analyst"]], editor=[rej, rej], story=[story])
@@ -562,9 +562,9 @@ def test_signed_and_grouped_numbers(press):
     assert analyst_codes(press, lambda d: d["claims"][0].update(text="16 pressures in 60 s, 6-10 passes.")) == ()
 
 
-@pytest.mark.parametrize("word", ["two", "Twenty", "ninety", "hundred", "half", "halves", "double", "doubled",
+@pytest.mark.parametrize("word", ["two", "Twenty", "ninety", "hundred", "halves", "double", "doubled",
                                   "twice", "triple", "tripled", "third", "thirds", "quarter", "quarters",
-                                  "first", "tenth", "3rd", "11th"])
+                                  "tenth", "3rd", "11th"])
 def test_number_words_rejected(press, word):
     codes = analyst_codes(press, lambda d: d["claims"][0].update(text=f"Harbour made 16 pressures, {word} time."))
     assert f"NUMBER_WORD:{word.lower()}" in codes
@@ -664,3 +664,63 @@ def test_timed_out_call_is_cancelled(press):
     t = Timeouts(analyst_s=0.05)
     insight, trace = run(run_moment(cand, bundle, Slow("fake"), timeouts=t))
     assert seen == ["cancelled"] and trace.steps[0].status == StepStatus.timeout
+
+
+# ------------------------------------------------------------ review round 2
+
+
+@pytest.mark.parametrize("text", [
+    "Pressure in the second half of the period, 16 times.",
+    "Pressed 16 times in their own half, first half too.",
+    "Harbour Athletic pressed 16 times in Northbridge FC's half in the last 60 s.",
+    "Pressed 16 times before half-time, or half time.",
+    "At 59:52 the pressure reached 16.",
+])
+def test_legitimate_text_passes(press, text):
+    assert analyst_codes(press, lambda d: d["claims"][0].update(text=text)) == ()
+
+
+@pytest.mark.parametrize("text", [
+    "Harbour won half of the passes.", "A goal, a half.", "A goal by half.",
+    "Half the passes were won.", "Harbour doubled up.",
+])
+def test_fraction_half_rejected(goal, text):  # goal card text has no number words
+    cand, bundle = goal
+    _, hw = model_for(cand, bundle)
+    d = copy.deepcopy(hw["analyst"])
+    d["claims"][0]["text"] = text
+    codes = check_analyst(AnalystOutput.model_validate(d), cand, bundle)
+    assert any(c.startswith("NUMBER_WORD:") for c in codes)
+
+
+def test_card_words_are_allowed_even_if_normally_rejected(press):
+    cand, bundle = press
+    d = cand.model_dump(mode="json")
+    d["source_card"]["body"] = d["source_card"]["body"] + " Twice."
+    cand2 = type(cand).model_validate(d)
+    _, hw = model_for(cand, bundle)
+    d2 = copy.deepcopy(hw["analyst"])
+    d2["claims"][0]["text"] = "Harbour pressed 16 times, twice."
+    assert check_analyst(AnalystOutput.model_validate(d2), cand2, bundle) == ()
+    assert "NUMBER_WORD:twice" in check_analyst(AnalystOutput.model_validate(d2), cand, bundle)
+
+
+def test_trigger_clock_always_allowed(press):
+    cand, bundle = press
+    assert analyst_codes(press, lambda d: d["claims"][0].update(text="Peak at 59:52.", evidence_event_ids=["e022"])) == ()
+
+
+def test_source_card_text_passes_checks(cands):
+    for cand, bundle in cands:
+        card = cand.source_card
+        claim = {"claim_id": "c1", "kind": "observation", "text": card.body,
+                 "evidence_event_ids": list(card.evidence_event_ids),
+                 "metric_refs": [{"name": m.name.value, "team_id": m.team_id} for m in card.metrics]}
+        out = AnalystOutput.model_validate({"candidate_id": cand.candidate_id, "snapshot_id": cand.snapshot_id,
+                                            "claims": [claim]})
+        assert check_analyst(out, cand, bundle) == ()
+        v = [{"persona": p, "title": card.title, "body": card.body, "claim_ids": ["c1"]}
+             for p in ("analyst", "casual")]
+        story = StoryOutput.model_validate({"candidate_id": cand.candidate_id, "snapshot_id": cand.snapshot_id,
+                                            "variants": v})
+        assert set(check_story(story, out.claims, cand)) <= {"IDENTICAL_BODIES", "CASUAL_TOO_MANY_NUMBERS"}

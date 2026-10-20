@@ -7,7 +7,7 @@ from contracts.agents import EvidenceBundle, MomentCandidate
 _CLAIMS = {
     "press_surge@2058": [
         {"claim_id": "c1", "kind": "observation",
-         "text": "Harbour Athletic made 16 pressures in Northbridge FC's end of the pitch in the last 60 s.",
+         "text": "Harbour Athletic made 16 pressures in Northbridge FC's half in the last 60 s.",
          "evidence_event_ids": ["e024", "e025"], "metric": ("pressures_opp_half", "hba")},
         {"claim_id": "c2", "kind": "interpretation",
          "text": "Northbridge FC completed 6 of 10 passes, which is consistent with the pressure "
@@ -28,7 +28,7 @@ _CLAIMS = {
 _VARIANTS = {
     "press_surge@2058": (
         ("Harbour pressed high", "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's "
-         "end of the pitch; Northbridge completed 6 of 10 passes (60%)."),
+         "half; Northbridge completed 6 of 10 passes (60%)."),
         ("Harbour hassled Northbridge", "Harbour Athletic kept closing Northbridge FC down near their own "
          "goal, which suggests Northbridge found it hard to keep the ball."),
     ),
