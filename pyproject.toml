@@ -4,13 +4,16 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
   "pydantic==2.14.1",
+  "fastapi==0.156.2",
+  "uvicorn==0.54.0",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest==9.1.1",
+  "httpx==0.28.1",
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "services/api"]
 testpaths = ["tests"]
