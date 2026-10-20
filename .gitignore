@@ -11,3 +11,10 @@ __pycache__/
 
 # Playwright artifacts
 apps/web/e2e/artifacts/
+
+# Local only, never published: internal research (contains private links and a
+# verbatim copy of the official rules) and raw outputs fetched from remote MCP servers
+reports/
+research_notes/
+mcp-tests/results.json
+mcp-tests/azure-tools.json

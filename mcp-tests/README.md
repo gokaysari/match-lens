@@ -17,9 +17,9 @@ Dependencies are pinned in package-lock.json. Azure MCP is invoked through npx w
 
 Evidence:
 
-- `results.json`: discovered schemas and redacted/truncated sample responses from the latest remote run.
+- `results.json` (local only, gitignored): discovered schemas and redacted/truncated sample responses from the latest remote run.
 - `football-results.tap`: eleven fixture test results.
 - `audit.json`: npm vulnerability database response for this installed test dependency tree.
-- `azure-tools.json`: Azure CLI tool catalog, not evidence of Azure account access.
+- `azure-tools.json` (local only, gitignored): Azure CLI tool catalog, not evidence of Azure account access.
 
 SportMonks/API-Football need provider tokens and licensed data; they were not installed or called. DBHub/AntV/Qdrant were not selected for this MVP and remain untested. No Azure resources, GitHub issues/PRs, or external messages are created by these checks.

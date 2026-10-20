@@ -1,6 +1,6 @@
 # Match Lens — project rules
 
-Hackathon entry: Microsoft Premier League "Inside the Game". Deadline 2026-10-28 09:59 Istanbul. Plan in `TODO.md`, design rationale in `reports/` (Turkish).
+Hackathon entry: Microsoft Premier League "Inside the Game". Deadline 2026-10-28 09:59 Istanbul. Plan in `TODO.md`, design rationale in local, unpublished `reports/` (Turkish; gitignored).
 
 ## Non-negotiable product rules
 
@@ -10,6 +10,8 @@ Hackathon entry: Microsoft Premier League "Inside the Game". Deadline 2026-10-28
 - No role (agent or code path) can modify events or scores. Tools exposed to match agents are read-only and bounded.
 - The UI renders only allow-listed card templates. Never render model output as HTML (`dangerouslySetInnerHTML`, `innerHTML`, `eval`).
 - No secrets in the repo, prompts, traces or test output.
+- The repo will be public: never commit personal data, private links (chat shares, docs), verbatim third-party content (e.g. the official rules) or raw outputs fetched from remote services. Keep such files local and gitignored.
+- Stage files explicitly by path; never `git add -A` / `git add .` / `git commit -a` without reading what gets added.
 
 ## Engineering rules
 

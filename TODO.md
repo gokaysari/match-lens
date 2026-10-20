@@ -75,5 +75,5 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 
 ## Depo hijyeni
 
-- [ ] `mcp-tests/azure-tools.json` (1,3 MB) ve `results.json` (369 KB) public depoda tutulacak mı karar ver.
-- [ ] `research_notes/.../official-rules-snapshot.md` kuralların kopyası; teslim deposuna konup konmayacağını kontrol et.
+- [x] `reports/`, `research_notes/` (özel link + kuralların kopyası) ve uzak MCP ham çıktıları depodan çıkarıldı, yerelde duruyor.
+- [ ] Public'e açmadan önce geçmişi temizle: eski commit'lerde bu dosyalar ve kişisel e-posta var → tek temiz commit'le, GitHub noreply e-postasıyla yayınla.
