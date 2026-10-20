@@ -14,7 +14,7 @@ from contracts.agents import (
     AnalystOutput,
     EditorReview,
     Insight,
-    Outcome,
+    InsightOutcome as Outcome,
     Persona,
     Role,
     StepStatus,
@@ -128,6 +128,84 @@ def test_happy_path_published(which, request):
     assert all(s.detail is None for s in trace.steps)
 
 
+def test_published_insight_is_rendered_with_facts(press, goal):
+    cand, bundle = press
+    m, hw = model_for(cand, bundle)
+    insight, _ = run(run_moment(cand, bundle, m))
+    by = {v.persona: v for v in insight.variants}
+    assert by[Persona.analyst].body == (
+        "Harbour Athletic made 16 pressures in Northbridge FC's half in the last 60 s; "
+        "Northbridge completed 6 of 10 passes.")
+    assert all("{" not in v.title + v.body for v in insight.variants)
+    c1, c2 = insight.claims
+    assert c1.text == "Harbour Athletic made 16 pressures in Northbridge FC's half in the last 60 s."
+    assert c1.template == hw["analyst"]["claims"][0]["text"]
+    assert c1.fact_keys == ("pressures_opp_half.hba", "window_s")
+    assert c2.fact_keys == ("pass_completion.nbr.frac",)
+    # facts in order of first use by the published claims
+    assert [(f.key, f.text) for f in insight.facts] == [
+        ("pressures_opp_half.hba", "16"), ("window_s", "60"), ("pass_completion.nbr.frac", "6 of 10")]
+    # goal: clock and score come from code
+    cand, bundle = goal
+    m, _ = model_for(cand, bundle)
+    insight, _ = run(run_moment(cand, bundle, m))
+    by = {v.persona: v for v in insight.variants}
+    assert "scored at 60:08 to lead 0-1" in by[Persona.analyst].body
+    assert "8.4 s" in insight.claims[1].text
+
+
+def test_only_facts_used_by_cited_claims_are_published(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    story = copy.deepcopy(hw["storyteller"])
+    story["variants"][0]["body"] = "Harbour Athletic made {pressures_opp_half.hba} pressures."
+    for v in story["variants"]:
+        v["claim_ids"] = ["c1"]
+    m, _ = model_for(cand, bundle, story=[story])
+    insight, _ = run(run_moment(cand, bundle, m))
+    assert {f.key for f in insight.facts} == {"pressures_opp_half.hba", "window_s"}
+
+
+def test_analyst_input_shows_facts_as_key_text_meaning(press):
+    cand, bundle = press
+    m, _ = model_for(cand, bundle)
+    run(run_moment(cand, bundle, m))
+    data = json.loads(m.calls[0][2])
+    facts = {f["key"]: f for f in data["facts"]}
+    assert set(next(iter(facts.values()))) == {"key", "text", "meaning"}
+    assert facts["pressures_opp_half.hba"]["text"] == "16"
+    assert "Northbridge FC's half" in facts["pressures_opp_half.hba"]["meaning"]
+    assert "facts" not in data["bundle"]
+    # the editor sees the same facts and every claim as users will read it
+    ed = json.loads(m.calls[1][2])
+    assert {f["key"] for f in ed["facts"]} == set(facts)
+    assert ed["rendered_claims"]["c1"].startswith("Harbour Athletic made 16 pressures")
+
+
+def test_fenced_json_reply_is_accepted(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    fenced = "```json\n" + json.dumps(hw["analyst"]) + "\n```"
+    m, _ = model_for(cand, bundle, analyst=[fenced])
+    insight, trace = run(run_moment(cand, bundle, m))
+    assert insight.outcome == Outcome.published and trace.steps[0].status == StepStatus.ok
+
+
+@pytest.mark.parametrize("wrap", [
+    lambda s: "Here you go: " + s,
+    lambda s: "```json\n" + s + "\n```\nThanks",
+    lambda s: "```\n" + s + "\n```",
+    lambda s: "```json\n```json\n" + s + "\n```\n```",
+])
+def test_other_wrappers_are_schema_invalid(press, wrap):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    bad = wrap(json.dumps(hw["analyst"]))
+    m, _ = model_for(cand, bundle, analyst=[bad, bad])
+    insight, trace = run(run_moment(cand, bundle, m))
+    assert insight.outcome == Outcome.fallback and trace.steps[0].detail == "SCHEMA_INVALID"
+
+
 def test_repair_after_unknown_evidence(press):
     cand, bundle = press
     _, hw = model_for(cand, bundle)
@@ -165,18 +243,40 @@ def test_unparseable_output_is_invalid(press):
     assert "not json" not in (trace.steps[0].detail or "")
 
 
-def test_analyst_number_not_in_metrics_is_invalid(press):
+def test_analyst_digits_are_invalid_and_repair_names_the_claim(press):
     cand, bundle = press
     _, hw = model_for(cand, bundle)
     bad = copy.deepcopy(hw["analyst"])
-    bad["claims"][0]["text"] = "Harbour Athletic made 42 pressures in Northbridge FC's half."
+    bad["claims"][1]["text"] = "Harbour Athletic made 42 pressures in Northbridge FC's half."
     out = AnalystOutput.model_validate(bad)
-    assert "NUMBER_NOT_ALLOWED:42" in check_analyst(out, cand, bundle)
+    assert "DIGIT_FORBIDDEN:c2" in check_analyst(out, cand, bundle)
     m, _ = model_for(cand, bundle, analyst=[bad, hw["analyst"]])
     insight, trace = run(run_moment(cand, bundle, m))
     assert trace.steps[0].status == StepStatus.invalid
-    assert "NUMBER_NOT_ALLOWED:42" in trace.steps[0].detail
+    assert "DIGIT_FORBIDDEN:c2" in trace.steps[0].detail
     assert insight.outcome == Outcome.published
+    repair = json.loads(m.calls[1][2])["repair"]
+    assert repair["check_codes"] == ["DIGIT_FORBIDDEN:c2"]
+    assert repair["previous_output"]["claims"][1]["text"] == bad["claims"][1]["text"]
+
+
+def test_repair_of_unparsable_output_has_no_previous_output(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    m, _ = model_for(cand, bundle, analyst=["not json", hw["analyst"]])
+    insight, _ = run(run_moment(cand, bundle, m))
+    repair = json.loads(m.calls[1][2])["repair"]
+    assert repair == {"check_codes": ["SCHEMA_INVALID"]}
+
+
+def test_repair_of_schema_invalid_json_returns_the_object(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    broken = {"candidate_id": cand.candidate_id, "snapshot_id": cand.snapshot_id, "claims": "none"}
+    m, _ = model_for(cand, bundle, analyst=[broken, hw["analyst"]])
+    run(run_moment(cand, bundle, m))
+    repair = json.loads(m.calls[1][2])["repair"]
+    assert repair["check_codes"] == ["SCHEMA_INVALID"] and repair["previous_output"] == broken
 
 
 # ------------------------------------------------------------ editor
@@ -223,7 +323,8 @@ def test_partial_approval_publishes_only_approved(press):
     _, hw = model_for(cand, bundle)
     rej = rejecting(hw, {"c2"})
     story = copy.deepcopy(hw["storyteller"])
-    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's half."
+    story["variants"][0]["body"] = ("In the last {window_s} s Harbour Athletic made "
+                                    "{pressures_opp_half.hba} pressures in Northbridge FC's half.")
     for v in story["variants"]:
         v["claim_ids"] = ["c1"]
     m, _ = model_for(cand, bundle, analyst=[hw["analyst"], hw["analyst"]], editor=[rej, rej], story=[story])
@@ -259,6 +360,7 @@ def test_abstain_gives_template_variants(press):
     assert cand.source_card.body in by[Persona.analyst].body
     assert "16" in by[Persona.analyst].body and "6/10" in by[Persona.analyst].body
     assert by[Persona.casual].body == cand.source_card.body
+    assert insight.facts == ()
     assert insight.model_id == "fake"
 
 
@@ -298,6 +400,36 @@ def test_total_budget_exceeded_falls_back(press):
     assert len(m.calls) == 2  # analyst ok (30 s), editor ok (60 s > 45 s), storyteller skipped
 
 
+def test_timeout_caused_by_total_budget_is_traced_as_budget(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    m, _ = model_for(cand, bundle, analyst=[delayed(1.0, hw["analyst"])])
+    t = Timeouts(analyst_s=20, total_s=0.05)
+    insight, trace = run(run_moment(cand, bundle, m, timeouts=t))
+    assert insight.outcome == Outcome.fallback
+    assert (trace.steps[0].status, trace.steps[0].detail) == (StepStatus.timeout, "budget")
+    # a role timeout shorter than the budget is a plain timeout
+    m, _ = model_for(cand, bundle, analyst=[delayed(1.0, hw["analyst"])])
+    _, trace = run(run_moment(cand, bundle, m, timeouts=Timeouts(analyst_s=0.05, total_s=5)))
+    assert (trace.steps[0].status, trace.steps[0].detail) == (StepStatus.timeout, None)
+
+
+def test_cancellation_propagates(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    m, _ = model_for(cand, bundle, analyst=[delayed(5.0, hw["analyst"])])
+
+    async def go():
+        task = asyncio.ensure_future(run_moment(cand, bundle, m))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        return await task
+
+    with pytest.raises(asyncio.CancelledError):
+        run(go())
+    assert "CancelledError" in (run_moment.__doc__ or "")
+
+
 def test_model_raises_falls_back_never_raises(press):
     cand, bundle = press
     m, _ = model_for(cand, bundle, analyst=[RuntimeError("secret-token-123")])
@@ -328,7 +460,12 @@ def story_variant(hw, **over):
     "mutate,code",
     [
         (lambda hw: story_variant(hw, analyst={"body": "Harbour Athletic made 99 pressures."}),
-         "NUMBER_NOT_ALLOWED:99"),
+         "DIGIT_FORBIDDEN:analyst"),
+        (lambda hw: story_variant(hw, analyst={"body": "They made {shots.invented} shots."}),
+         "UNKNOWN_FACT:shots.invented"),
+        (lambda hw: story_variant(hw, analyst={"body": "It is {score}."}), "FACT_NOT_IN_CLAIMS:score"),
+        (lambda hw: story_variant(hw, casual={"body": "Pressing {pressures_opp_half.hba} and {window_s}."}),
+         "CASUAL_TOO_MANY_NUMBERS"),
         (lambda hw: story_variant(hw, casual={"claim_ids": ["c9"]}), "CLAIM_NOT_APPROVED:c9"),
         (lambda hw: story_variant(hw, casual={"body": "same", "title": "t"},
                                   analyst={"body": "same"}), "IDENTICAL_BODIES"),
@@ -386,6 +523,35 @@ def test_storyteller_input_has_no_events(press):
     assert sorted(data["personas"]) == ["analyst", "casual"]
     assert data["source_fact"] == {"title": cand.source_card.title, "body": cand.source_card.body}
     assert [c["claim_id"] for c in data["approved_claims"]] == ["c1", "c2"]
+    assert data["approved_claims"][0]["text"].startswith("Harbour Athletic made {pressures_opp_half.hba}")
+    # only the facts the approved claims use, as key/text/meaning
+    assert [f["key"] for f in data["facts"]] == ["pressures_opp_half.hba", "window_s", "pass_completion.nbr.frac"]
+    assert all(set(f) == {"key", "text", "meaning"} for f in data["facts"])
+
+
+def test_storyteller_gets_only_facts_of_approved_claims(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    rej = rejecting(hw, {"c2"})
+    story = copy.deepcopy(hw["storyteller"])
+    story["variants"][0]["body"] = "Harbour Athletic made {pressures_opp_half.hba} pressures."
+    for v in story["variants"]:
+        v["claim_ids"] = ["c1"]
+    m, _ = model_for(cand, bundle, analyst=[hw["analyst"]] * 2, editor=[rej, rej], story=[story])
+    run(run_moment(cand, bundle, m))
+    data = json.loads(m.calls[-1][2])
+    assert [f["key"] for f in data["facts"]] == ["pressures_opp_half.hba", "window_s"]
+
+
+def test_prompts_explain_the_placeholder_rule():
+    assert PROMPT_VERSION == "p3"
+    for role in (Role.analyst, Role.storyteller, Role.single):
+        text = load_prompt(role)
+        assert "{pass_completion.nbr.frac}" in text and "{prev.pass_completion.nbr.frac}" in text
+        assert "final third" in text and "half-time" in text and "one-two" in text
+        assert "number words" in text and "ordinal" in text
+    assert "meaning" in load_prompt(Role.editor) and "placeholder" in load_prompt(Role.editor)
+    assert "abstain" in load_prompt(Role.single) and "story" in load_prompt(Role.single)
 
 
 def test_prompts_are_constant_and_complete():
@@ -426,19 +592,13 @@ def test_check_analyst_codes(press):
     assert "UNKNOWN_EVIDENCE:e999" in codes(lambda d: d["claims"][0].update(evidence_event_ids=["e999"]))
     assert "UNKNOWN_EVIDENCE:<invalid-id>" in codes(
         lambda d: d["claims"][0].update(evidence_event_ids=["e" * 500]))
-    assert "UNKNOWN_METRIC_REF:pressures_opp_half/zzz" in codes(
-        lambda d: d["claims"][0]["metric_refs"][0].update(team_id="zzz"))
-    assert "NUMBER_NOT_ALLOWED:42" in codes(lambda d: d["claims"][0].update(text="42 pressures"))
-    # minute/second of a cited event are allowed: e024 is at 3539230 ms = 58:59
-    assert codes(lambda d: d["claims"][0].update(text="Pressure at 58:59 hurt, 16 times.")) == ()
-    # ... but bare clock numbers and clocks of events that are not cited are not
-    assert "NUMBER_NOT_ALLOWED:58" in codes(lambda d: d["claims"][0].update(text="Pressure at minute 58."))
-    assert "NUMBER_NOT_ALLOWED:59" in codes(lambda d: d["claims"][0].update(text="Pressure after 59 s."))
-    assert "NUMBER_NOT_ALLOWED:59" in codes(lambda d: d["claims"][0].update(text="Pressure at 58:59.",
-                                                                            evidence_event_ids=["e022"]))
+    assert "DIGIT_FORBIDDEN:c1" in codes(lambda d: d["claims"][0].update(text="42 pressures"))
+    assert "DIGIT_FORBIDDEN:c2" in codes(lambda d: d["claims"][1].update(text="Pressure at 58:59."))
+    assert "UNKNOWN_FACT:zzz.invented" in codes(lambda d: d["claims"][0].update(text="{zzz.invented} pressures"))
+    assert "BAD_PLACEHOLDER:c1" in codes(lambda d: d["claims"][0].update(text="{Zzz} pressures"))
     assert "TOO_MANY_CLAIMS" in codes(lambda d: d.update(claims=d["claims"] * 2))
     assert "NO_OBSERVATION" in codes(lambda d: d["claims"][0].update(kind="interpretation"))
-    assert "MARKUP_FORBIDDEN:c1" in codes(lambda d: d["claims"][0].update(text="16 <b>pressures</b>"))
+    assert "MARKUP_FORBIDDEN:c1" in codes(lambda d: d["claims"][0].update(text="{window_s} <b>pressures</b>"))
     # abstaining with no claims is valid
     assert check_analyst(AnalystOutput(candidate_id=cand.candidate_id, snapshot_id=cand.snapshot_id,
                                        claims=(), abstain=True), cand, bundle) == ()
@@ -466,29 +626,25 @@ def test_check_story_codes(press):
     cand, bundle, hw = parts(press)
     analyst = AnalystOutput.model_validate(hw["analyst"])
     approved = analyst.claims
-    assert check_story(StoryOutput.model_validate(hw["storyteller"]), approved, cand) == ()
+    assert check_story(StoryOutput.model_validate(hw["storyteller"]), approved, cand, bundle) == ()
 
     def codes(mut):
         d = copy.deepcopy(hw["storyteller"])
         mut(d)
-        return check_story(StoryOutput.model_validate(d), approved, cand)
+        return check_story(StoryOutput.model_validate(d), approved, cand, bundle)
 
     assert "ID_MISMATCH:candidate_id" in codes(lambda d: d.update(candidate_id="x/y"))
     assert "MISSING_PERSONA:casual" in codes(lambda d: d.update(variants=d["variants"][:1]))
     assert "DUPLICATE_PERSONA:analyst" in codes(lambda d: d["variants"][1].update(persona="analyst"))
     assert "CLAIM_NOT_APPROVED:c3" in codes(lambda d: d["variants"][0].update(claim_ids=["c3"]))
     assert "NO_CLAIM_CITED:analyst" in codes(lambda d: d["variants"][0].update(claim_ids=[]))
-    assert "NUMBER_NOT_ALLOWED:7" in codes(lambda d: d["variants"][0].update(title="Seven"[:0] + "7 presses"))
+    assert "DIGIT_FORBIDDEN:analyst" in codes(lambda d: d["variants"][0].update(title="7 presses"))
     assert "MARKUP_FORBIDDEN:analyst" in codes(lambda d: d["variants"][0].update(title="a > b"))
     assert "IDENTICAL_BODIES" in codes(lambda d: d["variants"][1].update(body=d["variants"][0]["body"]))
-    assert "CASUAL_TOO_MANY_NUMBERS" in codes(
-        lambda d: d["variants"][1].update(body="16 pressures and 6 of 10 passes."))
-    assert "CASUAL_TOO_MANY_NUMBERS" in codes(  # title and body count together
-        lambda d: d["variants"][1].update(title="16 pressures", body="Hassled for 60 s."))
-    assert "NUMBER_NOT_ALLOWED:1016" in codes(lambda d: d["variants"][0].update(body="1,016 pressures."))
     assert "NUMBER_WORD:twice" in codes(lambda d: d["variants"][0].update(body="Twice as many pressures."))
-    # a number from the source card but not from the referenced claims is allowed
-    assert codes(lambda d: d["variants"][1].update(body="Harbour pressed for 60 s, a lot of hassle.")) == ()
+    # the source card's numbers are not a source for story text any more: only the claims' facts
+    assert "FACT_NOT_IN_CLAIMS:pass_completion.nbr.pct" in codes(
+        lambda d: d["variants"][1].update(body="{pass_completion.nbr.pct} of passes."))
 
 
 # ------------------------------------------------------------ single-agent baseline
@@ -510,16 +666,73 @@ def test_single_agent_happy_path(press):
     assert m.calls[0][1] == load_prompt(Role.single)
 
 
-def test_single_agent_invalid_number_falls_back(press):
+def bad_single(hw):
+    out = copy.deepcopy(single_output(hw))
+    out["analysis"]["claims"][0]["text"] = "Harbour Athletic made 42 pressures."
+    return out
+
+
+def test_single_agent_invalid_twice_falls_back(press):
     cand, bundle = press
     _, hw = model_for(cand, bundle)
-    out = single_output(hw)
-    out["analysis"]["claims"][0]["text"] = "Harbour Athletic made 42 pressures."
+    m = FakeModelClient("fake")
+    m.script(Role.single, json.dumps(bad_single(hw)), json.dumps(bad_single(hw)))
+    insight, trace = run(run_single(cand, bundle, m))
+    assert insight.outcome == Outcome.fallback and insight.claims == ()
+    assert [(s.attempt, s.status) for s in trace.steps] == [(1, StepStatus.invalid), (2, StepStatus.invalid)]
+    assert "DIGIT_FORBIDDEN:c1" in trace.steps[0].detail
+
+
+def test_single_agent_gets_one_repair_round_like_the_pipeline(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    m = FakeModelClient("fake")
+    m.script(Role.single, json.dumps(bad_single(hw)), json.dumps(single_output(hw)))
+    insight, trace = run(run_single(cand, bundle, m))
+    assert insight.outcome == Outcome.published and len(insight.claims) == 2
+    assert [(s.role, s.attempt, s.status) for s in trace.steps] == [
+        (Role.single, 1, StepStatus.invalid), (Role.single, 2, StepStatus.ok)]
+    repair = json.loads(m.calls[1][2])["repair"]
+    assert repair["check_codes"] == ["DIGIT_FORBIDDEN:c1"]
+    assert repair["previous_output"]["analysis"]["claims"][0]["text"] == "Harbour Athletic made 42 pressures."
+
+
+def test_single_agent_may_abstain_without_a_story(press):
+    cand, bundle = press
+    out = {"analysis": {"candidate_id": cand.candidate_id, "snapshot_id": cand.snapshot_id, "claims": [],
+                        "abstain": True, "abstain_reason": "nothing supportable"}}
     m = FakeModelClient("fake")
     m.script(Role.single, json.dumps(out))
     insight, trace = run(run_single(cand, bundle, m))
-    assert insight.outcome == Outcome.fallback and insight.claims == ()
-    assert trace.steps[0].status == StepStatus.invalid and "NUMBER_NOT_ALLOWED:42" in trace.steps[0].detail
+    assert insight.outcome == Outcome.abstained and len(m.calls) == 1
+    assert trace.steps[0].status == StepStatus.ok
+
+
+def test_single_agent_story_is_required_unless_abstaining(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    m = FakeModelClient("fake")
+    m.script(Role.single, json.dumps({"analysis": hw["analyst"]}), json.dumps(single_output(hw)))
+    insight, trace = run(run_single(cand, bundle, m))
+    assert trace.steps[0].detail == "NO_STORY" and insight.outcome == Outcome.published
+
+
+def test_single_agent_shares_one_total_budget(press):
+    cand, bundle = press
+    clock = [0.0]
+
+    class Clocked(FakeModelClient):
+        async def generate(self, **kw):
+            clock[0] += 50.0
+            return await super().generate(**kw)
+
+    _, hw = model_for(cand, bundle)
+    m = Clocked("fake")
+    m.script(Role.single, json.dumps(bad_single(hw)), json.dumps(single_output(hw)))
+    insight, trace = run(run_single(cand, bundle, m, now=lambda: clock[0]))
+    assert insight.outcome == Outcome.fallback and len(m.calls) == 1
+    assert (trace.steps[-1].attempt, trace.steps[-1].status, trace.steps[-1].detail) == (
+        2, StepStatus.timeout, "BudgetExceeded")
 
 
 def test_single_agent_timeout_and_error(press):
@@ -536,51 +749,6 @@ def test_single_agent_timeout_and_error(press):
 
 
 # ------------------------------------------------------------ review round 1
-
-
-def analyst_codes(press, mutate):
-    cand, bundle, hw = parts(press)
-    d = copy.deepcopy(hw["analyst"])
-    mutate(d)
-    return check_analyst(AnalystOutput.model_validate(d), cand, bundle)
-
-
-def test_arbitrary_numbers_with_cited_last_events_are_rejected(press):
-    cand, bundle = press
-    last = [e.event_id for e in bundle.events[-6:]]
-
-    def m(d):
-        d["claims"][0].update(text="Northbridge FC completed 48 of 52 passes.", evidence_event_ids=last)
-
-    codes = analyst_codes(press, m)
-    assert "NUMBER_NOT_ALLOWED:48" in codes and "NUMBER_NOT_ALLOWED:52" in codes
-
-
-def test_signed_and_grouped_numbers(press):
-    assert "NUMBER_NOT_ALLOWED:-16" in analyst_codes(press, lambda d: d["claims"][0].update(text="-16 pressures."))
-    assert "NUMBER_NOT_ALLOWED:1016" in analyst_codes(press, lambda d: d["claims"][0].update(text="1,016 pressures."))
-    assert analyst_codes(press, lambda d: d["claims"][0].update(text="16 pressures in 60 s, 6-10 passes.")) == ()
-
-
-@pytest.mark.parametrize("word", ["two", "Twenty", "ninety", "hundred", "halves", "double", "doubled",
-                                  "twice", "triple", "tripled", "third", "thirds", "quarter", "quarters",
-                                  "tenth", "3rd", "11th"])
-def test_number_words_rejected(press, word):
-    codes = analyst_codes(press, lambda d: d["claims"][0].update(text=f"Harbour made 16 pressures, {word} time."))
-    assert f"NUMBER_WORD:{word.lower()}" in codes
-
-
-def test_one_only_rejected_before_counted_noun(press):
-    assert "NUMBER_WORD:one" in analyst_codes(press, lambda d: d["claims"][0].update(text="Harbour won one goal."))
-    assert "NUMBER_WORD:one" in analyst_codes(press, lambda d: d["claims"][0].update(text="One shot, 16 pressures."))
-    assert analyst_codes(press, lambda d: d["claims"][0].update(text="No one escaped 16 pressures, one of them long.")) == ()
-
-
-def test_number_words_rejected_in_story(press):
-    cand, bundle, hw = parts(press)
-    s = copy.deepcopy(hw["storyteller"])
-    s["variants"][1]["body"] = "Harbour pressed twice as hard."
-    assert "NUMBER_WORD:twice" in check_story(StoryOutput.model_validate(s), AnalystOutput.model_validate(hw["analyst"]).claims, cand)
 
 
 def test_no_approved_observation_falls_back(press):
@@ -639,7 +807,7 @@ def test_insight_keeps_only_cited_claims(press):
     cand, bundle = press
     _, hw = model_for(cand, bundle)
     story = copy.deepcopy(hw["storyteller"])
-    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures."
+    story["variants"][0]["body"] = "In the last {window_s} s Harbour Athletic made {pressures_opp_half.hba} pressures."
     for v in story["variants"]:
         v["claim_ids"] = ["c1"]
     m, _ = model_for(cand, bundle, story=[story])
@@ -664,63 +832,3 @@ def test_timed_out_call_is_cancelled(press):
     t = Timeouts(analyst_s=0.05)
     insight, trace = run(run_moment(cand, bundle, Slow("fake"), timeouts=t))
     assert seen == ["cancelled"] and trace.steps[0].status == StepStatus.timeout
-
-
-# ------------------------------------------------------------ review round 2
-
-
-@pytest.mark.parametrize("text", [
-    "Pressure in the second half of the period, 16 times.",
-    "Pressed 16 times in their own half, first half too.",
-    "Harbour Athletic pressed 16 times in Northbridge FC's half in the last 60 s.",
-    "Pressed 16 times before half-time, or half time.",
-    "At 59:52 the pressure reached 16.",
-])
-def test_legitimate_text_passes(press, text):
-    assert analyst_codes(press, lambda d: d["claims"][0].update(text=text)) == ()
-
-
-@pytest.mark.parametrize("text", [
-    "Harbour won half of the passes.", "A goal, a half.", "A goal by half.",
-    "Half the passes were won.", "Harbour doubled up.",
-])
-def test_fraction_half_rejected(goal, text):  # goal card text has no number words
-    cand, bundle = goal
-    _, hw = model_for(cand, bundle)
-    d = copy.deepcopy(hw["analyst"])
-    d["claims"][0]["text"] = text
-    codes = check_analyst(AnalystOutput.model_validate(d), cand, bundle)
-    assert any(c.startswith("NUMBER_WORD:") for c in codes)
-
-
-def test_card_words_are_allowed_even_if_normally_rejected(press):
-    cand, bundle = press
-    d = cand.model_dump(mode="json")
-    d["source_card"]["body"] = d["source_card"]["body"] + " Twice."
-    cand2 = type(cand).model_validate(d)
-    _, hw = model_for(cand, bundle)
-    d2 = copy.deepcopy(hw["analyst"])
-    d2["claims"][0]["text"] = "Harbour pressed 16 times, twice."
-    assert check_analyst(AnalystOutput.model_validate(d2), cand2, bundle) == ()
-    assert "NUMBER_WORD:twice" in check_analyst(AnalystOutput.model_validate(d2), cand, bundle)
-
-
-def test_trigger_clock_always_allowed(press):
-    cand, bundle = press
-    assert analyst_codes(press, lambda d: d["claims"][0].update(text="Peak at 59:52.", evidence_event_ids=["e022"])) == ()
-
-
-def test_source_card_text_passes_checks(cands):
-    for cand, bundle in cands:
-        card = cand.source_card
-        claim = {"claim_id": "c1", "kind": "observation", "text": card.body,
-                 "evidence_event_ids": list(card.evidence_event_ids),
-                 "metric_refs": [{"name": m.name.value, "team_id": m.team_id} for m in card.metrics]}
-        out = AnalystOutput.model_validate({"candidate_id": cand.candidate_id, "snapshot_id": cand.snapshot_id,
-                                            "claims": [claim]})
-        assert check_analyst(out, cand, bundle) == ()
-        v = [{"persona": p, "title": card.title, "body": card.body, "claim_ids": ["c1"]}
-             for p in ("analyst", "casual")]
-        story = StoryOutput.model_validate({"candidate_id": cand.candidate_id, "snapshot_id": cand.snapshot_id,
-                                            "variants": v})
-        assert set(check_story(story, out.claims, cand)) <= {"IDENTICAL_BODIES", "CASUAL_TOO_MANY_NUMBERS"}

@@ -1,11 +1,15 @@
 """Deterministic validators for model output. Each returns a tuple of short, stable error
-codes; an empty tuple means valid. Pure functions, no I/O."""
+codes; an empty tuple means valid. Pure functions, no I/O.
+
+Model-written text (claims, story) is a template: it has no digits and no number words;
+numbers are `{fact_key}` placeholders naming a Fact of the evidence bundle."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
 
+from agents.render import BRACED, KEY, has_stray_braces, placeholder_keys, raw_placeholders, render
 from contracts.agents import (
     AnalystOutput,
     Claim,
@@ -17,38 +21,37 @@ from contracts.agents import (
     StoryOutput,
     Verdict,
 )
-from contracts.api import MetricValue
 
-_TIME = re.compile(r"(?<!\d)(\d{1,3}):(\d{2})(?!\d)")
-_NUM = re.compile(r"(?:(?<!\w)[-\u2212+])?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)")
 _SAFE_ID = re.compile(r"[A-Za-z0-9_@/:.-]{1,32}")
+
+TITLE_MAX, BODY_MAX = 60, 320
 
 ONES = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
         "sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety").split()
 NUMBER_WORDS = tuple(w for w in ONES if w != "one") + (
-    "hundred", "halves", "double", "doubled", "twice", "triple", "tripled", "third", "thirds",
-    "quarter", "quarters", "fourth", "fifth", "sixth", "seventh", "eighth",
+    "zero", "nil", "once", "hundred", "halves", "double", "doubled", "twice", "triple", "tripled",
+    "third", "thirds", "quarter", "quarters", "fourth", "fifth", "sixth", "seventh", "eighth",
     "ninth", "tenth", "dozen", "dozens", "couple", "handful")
-# "one" is common English ("no one", "one of"); it counts as a number word only before these nouns
-ONE_COUNTED_NOUNS = ("goal", "pass", "passes", "shot", "shots", "chance", "press", "pressure", "minute",
-                     "minutes")
-_WORD = re.compile(r"\b(" + "|".join(dict.fromkeys(NUMBER_WORDS)) + r")\b|\b(\d+(?:st|nd|rd|th))\b", re.I)
-_ONE = re.compile(r"\b(one)\s+(?:" + "|".join(ONE_COUNTED_NOUNS) + r")\b", re.I)
+# "one" / "single" are common English ("no one", "a single moment"); they count as number
+# words only before these nouns
+COUNTED_NOUNS = (r"goals?|passes|pass|shots?|chances?|press(?:es)?|pressures?|minutes?|seconds?|tackles?|"
+                 r"interceptions?|duels?|fouls?|touch(?:es)?|attempts?|turnovers?|recover(?:y|ies)|wins?")
+# fixed football phrases whose words would otherwise look like numbers (case-insensitive)
+EXEMPT_PHRASES = ("final third", "middle third", "attacking third", "defensive third", "one-two",
+                  "half-space", "half-time", "half time", "back four", "back three")
+
+_EXEMPT = re.compile(r"(?<![\w-])(?:" + "|".join(re.escape(p) for p in EXEMPT_PHRASES) + r")(?![\w-])", re.I)
+_WORD = re.compile(r"\b(" + "|".join(dict.fromkeys(NUMBER_WORDS)) + r")\b", re.I)
+_ONE = re.compile(r"\b(one|single)\s+(?:" + COUNTED_NOUNS + r")\b", re.I)
+_HALF = re.compile(r"\bhalf\b", re.I)
+_HALF_BEFORE_FRACTION = {"a", "by", "one"}
+_HALF_FOLLOW_FRACTION = {"of", "the", "as", "their", "his", "her", "its", "a", "an"}
+_HALF_PITCH_BEFORE = {"first", "second", "own", "other", "opposite", "opposing", "opponent", "opposition"}
 
 
 def safe_id(value: str) -> str:
     """Only plain identifiers are echoed into check codes (and so into traces)."""
     return value if _SAFE_ID.fullmatch(value) else "<invalid-id>"
-
-
-def numbers_in(text: str) -> list[float]:
-    return [float(m.replace(",", "").replace("\u2212", "-")) for m in _NUM.findall(text)]
-
-
-_HALF = re.compile(r"\bhalf\b", re.I)
-_HALF_BEFORE_FRACTION = {"a", "by", "one"}
-_HALF_FOLLOW_FRACTION = {"of", "the", "as", "their", "his", "her", "its", "a", "an"}
-_HALF_PITCH_BEFORE = {"first", "second", "own", "other", "opposite", "opposing", "opponent"}
 
 
 def _fraction_half(text: str) -> list[str]:
@@ -66,72 +69,45 @@ def _fraction_half(text: str) -> list[str]:
     return out
 
 
-def number_words_in(text: str, allowed: frozenset[str] = frozenset()) -> list[str]:
-    found = [(m.group(1) or m.group(2)).lower() for m in _WORD.finditer(text)]
+def number_words_in(text: str) -> list[str]:
+    text = _EXEMPT.sub(" ", text)
+    found = [m.group(1).lower() for m in _WORD.finditer(text)]
     found += [m.group(1).lower() for m in _ONE.finditer(text)]
     found += _fraction_half(text)
-    return [w for w in found if w not in allowed]
+    return found
 
 
-def card_words(candidate: MomentCandidate) -> frozenset[str]:
-    """Number words the deterministic source card itself uses AS numbers are allowed in
-    agent text. Words the card uses otherwise (e.g. a pitch "half") grant nothing."""
-    card = candidate.source_card
-    return frozenset(number_words_in(card.title + " " + card.body))
-
-
-def trigger_clock(candidate: MomentCandidate) -> tuple[int, int]:
-    s = candidate.trigger_clock_ms // 1000
-    return (s // 60, s % 60)
-
-
-def clocks_in(text: str) -> set[tuple[int, int]]:
-    """Every mm:ss written in `text`."""
-    return {(int(m.group(1)), int(m.group(2))) for m in _TIME.finditer(text)}
-
-
-def card_clocks(candidate: MomentCandidate) -> set[tuple[int, int]]:
-    """Times the deterministic card states (incl. its trigger clock). They are
-    allowed as mm:ss only; their digits never become bare allowed numbers."""
-    card = candidate.source_card
-    return clocks_in(card.title + " " + card.body) | {trigger_clock(candidate)}
-
-
-def _strip_cited_clocks(text: str, clocks: set[tuple[int, int]]) -> str:
-    def repl(m: re.Match) -> str:
-        return " " if (int(m.group(1)), int(m.group(2))) in clocks else m.group(0)
-
-    return _TIME.sub(repl, text)
-
-
-def _fmt(n: float) -> str:
-    return str(int(n)) if float(n).is_integer() else repr(n)
+def has_digit(text: str) -> bool:
+    """Any numeric character (ASCII or other scripts, superscripts, vulgar fractions)."""
+    return any(ch.isnumeric() for ch in text)
 
 
 def _dedupe(codes: Iterable[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(codes))
 
 
-def metric_numbers(m: MetricValue) -> set[float]:
-    out: set[float] = set()
-    if m.value is not None:
-        out.add(float(m.value))
-        if m.unit == "ratio":
-            out.add(float(round(m.value * 100)))
-    for n in (m.numerator, m.denominator):
-        if n is not None:
-            out.add(float(n))
-    return out
-
-
-def card_numbers(candidate: MomentCandidate) -> set[float]:
-    card = candidate.source_card
-    clocks = card_clocks(candidate)
-    out = set(numbers_in(_strip_cited_clocks(card.title, clocks)))
-    out |= set(numbers_in(_strip_cited_clocks(card.body, clocks)))
-    for m in card.metrics:
-        out |= metric_numbers(m)
-    return out
+def scan_template(text: str, label: str, fact_keys: frozenset[str]) -> tuple[list[str], bool]:
+    """Checks every rule on one model-written text. Returns (codes, placeholders_ok) where
+    placeholders_ok means every placeholder is well-formed and names a bundle fact."""
+    codes: list[str] = []
+    ok = True
+    if has_stray_braces(text):
+        codes.append(f"BAD_PLACEHOLDER:{label}")
+        ok = False
+    for raw in raw_placeholders(text):
+        if not KEY.fullmatch(raw):
+            codes.append(f"BAD_PLACEHOLDER:{label}")
+            ok = False
+        elif raw not in fact_keys:
+            codes.append(f"UNKNOWN_FACT:{raw[:64]}")
+            ok = False
+    rest = BRACED.sub(" ", text)
+    if has_digit(rest):
+        codes.append(f"DIGIT_FORBIDDEN:{label}")
+    codes += [f"NUMBER_WORD:{w}" for w in number_words_in(rest)]
+    if "<" in text or ">" in text:
+        codes.append(f"MARKUP_FORBIDDEN:{label}")
+    return codes, ok
 
 
 def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: EvidenceBundle) -> tuple[str, ...]:
@@ -148,37 +124,19 @@ def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: Eviden
         codes.append("TOO_MANY_CLAIMS")
     if not out.abstain and out.claims and not any(c.kind == ClaimKind.observation for c in out.claims):
         codes.append("NO_OBSERVATION")
-    by_id = {e.event_id: e for e in bundle.events}
-    metrics = {(m.name, m.team_id): m for m in bundle.metrics}
-    card_nums = card_numbers(candidate)
-    words = card_words(candidate)
+    known_events = {e.event_id for e in bundle.events}
+    fact_keys = frozenset(f.key for f in bundle.facts)
     seen: set[str] = set()
     for c in out.claims:
         cid = safe_id(c.claim_id)
         if c.claim_id in seen:
             codes.append(f"DUPLICATE_CLAIM_ID:{cid}")
         seen.add(c.claim_id)
-        allowed = set(card_nums)
-        clocks: set[tuple[int, int]] = card_clocks(candidate)
         for eid in c.evidence_event_ids:
-            ev = by_id.get(eid)
-            if ev is None:
+            if eid not in known_events:
                 codes.append(f"UNKNOWN_EVIDENCE:{safe_id(eid)}")
-            else:
-                s = ev.event_time_ms // 1000
-                clocks.add((s // 60, s % 60))
-        for ref in c.metric_refs:
-            m = metrics.get((ref.name, ref.team_id))
-            if m is None:
-                codes.append(f"UNKNOWN_METRIC_REF:{ref.name.value}/{safe_id(ref.team_id)}")
-            else:
-                allowed |= metric_numbers(m)
-        if "<" in c.text or ">" in c.text:
-            codes.append(f"MARKUP_FORBIDDEN:{cid}")
-        for n in numbers_in(_strip_cited_clocks(c.text, clocks)):
-            if n not in allowed:
-                codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
-        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(c.text, words)]
+        text_codes, _ = scan_template(c.text, cid, fact_keys)
+        codes += text_codes
     return _dedupe(codes)
 
 
@@ -208,7 +166,8 @@ def check_review(review: EditorReview, analyst_out: AnalystOutput, candidate: Mo
     return _dedupe(codes)
 
 
-def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate: MomentCandidate) -> tuple[str, ...]:
+def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate: MomentCandidate,
+                bundle: EvidenceBundle) -> tuple[str, ...]:
     codes: list[str] = []
     if story.candidate_id != candidate.candidate_id:
         codes.append("ID_MISMATCH:candidate_id")
@@ -223,35 +182,30 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
             codes.append(f"MISSING_PERSONA:{p.value}")
         elif counts[p] > 1:
             codes.append(f"DUPLICATE_PERSONA:{p.value}")
-    card_nums = card_numbers(candidate)
-    words = card_words(candidate)
+    fact_keys = frozenset(f.key for f in bundle.facts)
     bodies: dict[Persona, str] = {}
     for v in story.variants:
+        label = v.persona.value
         bodies.setdefault(v.persona, v.body)
-        allowed = set(card_nums)
-        clocks = card_clocks(candidate)
         if not v.claim_ids:
-            codes.append(f"NO_CLAIM_CITED:{v.persona.value}")
+            codes.append(f"NO_CLAIM_CITED:{label}")
+        allowed: set[str] = set()
         for cid in v.claim_ids:
             claim = approved.get(cid)
             if claim is None:
                 codes.append(f"CLAIM_NOT_APPROVED:{safe_id(cid)}")
             else:
-                # times the (already checked) claim states may be repeated as mm:ss;
-                # their digits are not counts
-                claim_clocks = clocks_in(claim.text)
-                clocks |= claim_clocks
-                allowed |= set(numbers_in(_strip_cited_clocks(claim.text, claim_clocks)))
-        shown = v.title + " " + v.body
-        nums = numbers_in(_strip_cited_clocks(shown, clocks))
-        for n in nums:
-            if n not in allowed:
-                codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
-        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(shown, words)]
-        if any(ch in v.title + v.body for ch in "<>"):
-            codes.append(f"MARKUP_FORBIDDEN:{v.persona.value}")
-        if v.persona == Persona.casual and len(nums) > 1:
+                allowed |= set(placeholder_keys(claim.text))
+        shown = v.title + "\n" + v.body
+        text_codes, ok = scan_template(shown, label, fact_keys)
+        codes += text_codes
+        used = placeholder_keys(shown)
+        codes += [f"FACT_NOT_IN_CLAIMS:{k[:64]}" for k in used if k in fact_keys and k not in allowed]
+        if v.persona == Persona.casual and len(used) > 1:
             codes.append("CASUAL_TOO_MANY_NUMBERS")
+        if ok:  # lengths are limits on what users see: check the rendered text
+            if len(render(v.title, bundle.facts)) > TITLE_MAX or len(render(v.body, bundle.facts)) > BODY_MAX:
+                codes.append(f"TOO_LONG:{label}")
     if Persona.analyst in bodies and Persona.casual in bodies and bodies[Persona.analyst] == bodies[Persona.casual]:
         codes.append("IDENTICAL_BODIES")
     return _dedupe(codes)
