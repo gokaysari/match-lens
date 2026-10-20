@@ -68,6 +68,27 @@
       "title": "Player",
       "type": "object"
     },
+    "Score": {
+      "additionalProperties": false,
+      "properties": {
+        "away": {
+          "minimum": 0,
+          "title": "Away",
+          "type": "integer"
+        },
+        "home": {
+          "minimum": 0,
+          "title": "Home",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "home",
+        "away"
+      ],
+      "title": "Score",
+      "type": "object"
+    },
     "Team": {
       "additionalProperties": false,
       "properties": {
@@ -101,6 +122,9 @@
   },
   "additionalProperties": false,
   "properties": {
+    "initial_score": {
+      "$ref": "#/$defs/Score"
+    },
     "match_id": {
       "minLength": 1,
       "title": "Match Id",
@@ -130,6 +154,16 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "segment_end_ms": {
+      "minimum": 0,
+      "title": "Segment End Ms",
+      "type": "integer"
+    },
+    "segment_start_ms": {
+      "minimum": 0,
+      "title": "Segment Start Ms",
+      "type": "integer"
+    },
     "synthetic": {
       "const": true,
       "title": "Synthetic",
@@ -155,6 +189,9 @@
     "teams",
     "players",
     "moments",
+    "initial_score",
+    "segment_start_ms",
+    "segment_end_ms",
     "synthetic"
   ],
   "title": "ScenarioMeta",

@@ -1,7 +1,7 @@
 import pytest
 
 from domain.ingest import IngestError, load_scenario
-from conftest import SCENARIO_DIR, base_event as ev
+from conftest import SCENARIO_DIR, base_event as ev, base_meta
 
 
 def test_valid_minimal_loads(make_scenario):
@@ -46,8 +46,14 @@ def test_clock_regression(make_scenario):
 
 
 def test_clock_reset_across_periods_ok(make_scenario):
-    load_scenario(make_scenario([ev(event_time_ms=2_700_000),
+    # period 2 clock restarts below the last period-1 stoppage-time event: allowed
+    load_scenario(make_scenario([ev(event_time_ms=2_900_000),
                                  ev(event_id="e2", sequence=2, period=2, event_time_ms=2_700_000)]))
+
+
+def test_decreasing_period_is_clock_regression(make_scenario):
+    err = code_of(make_scenario, [ev(period=2), ev(event_id="e2", sequence=2, period=1, event_time_ms=5)])
+    assert err.code == "CLOCK_REGRESSION" and err.event_ids == ["e2"]
 
 
 def test_match_id_mismatch(make_scenario):
@@ -80,3 +86,81 @@ def test_bad_json_line_is_invalid_event(make_scenario, tmp_path):
     with pytest.raises(IngestError) as ei:
         load_scenario(d)
     assert ei.value.code == "INVALID_EVENT"
+
+
+def test_missing_files(tmp_path, make_scenario):
+    with pytest.raises(IngestError) as ei:
+        load_scenario(tmp_path / "nope")
+    assert ei.value.code == "MISSING_FILE"
+    d = make_scenario([ev()])
+    (d / "events.jsonl").unlink()
+    with pytest.raises(IngestError) as ei:
+        load_scenario(d)
+    assert ei.value.code == "MISSING_FILE"
+
+
+def test_coerced_values_rejected_as_invalid_event(make_scenario):
+    err = code_of(make_scenario, [ev(sequence="7")])
+    assert err.code == "INVALID_EVENT" and err.event_ids == ["e1"]
+    assert "sequence" in str(err)  # field path in the message
+
+
+def test_invalid_meta_strict_and_detail(make_scenario):
+    err = code_of(make_scenario, [ev()], base_meta(scenario_seed="1"))
+    assert err.code == "INVALID_META" and "scenario_seed" in str(err)
+
+
+def test_recipient_unknown_and_opponent(make_scenario):
+    assert code_of(make_scenario, [ev(recipient_player_id="nbr-99")]).code == "UNKNOWN_PLAYER"
+    err = code_of(make_scenario, [ev(recipient_player_id="hba-04")])
+    assert err.code == "INVALID_EVENT" and err.event_ids == ["e1"]
+
+
+def press(**o):
+    base = dict(type="pressure", team_id="hba", player_id="hba-04", outcome=None, end_x=None,
+                end_y=None, recipient_player_id=None, possession_id=None,
+                pressured_player_id="nbr-07")
+    base.update(o)
+    return ev(**base)
+
+
+def test_pressured_must_be_known_opponent(make_scenario):
+    load_scenario(make_scenario([press()]))
+    assert code_of(make_scenario, [press(pressured_player_id="nbr-99")]).code == "UNKNOWN_PLAYER"
+    err = code_of(make_scenario, [press(pressured_player_id="hba-09")])
+    assert err.code == "INVALID_EVENT" and err.event_ids == ["e1"]
+
+
+def test_event_outside_segment(make_scenario):
+    err = code_of(make_scenario, [ev(event_time_ms=50)], base_meta(segment_start_ms=100))
+    assert err.code == "EVENT_OUTSIDE_SEGMENT" and err.event_ids == ["e1"]
+    err = code_of(make_scenario, [ev(event_time_ms=500)], base_meta(segment_end_ms=400))
+    assert err.code == "EVENT_OUTSIDE_SEGMENT"
+
+
+def moment(first, last):
+    return [{"key": "a", "description": "d", "first_event_id": first, "last_event_id": last}]
+
+
+def test_moment_events_must_exist_and_be_ordered(make_scenario):
+    evs = [ev(), ev(event_id="e2", sequence=2, event_time_ms=1)]
+    err = code_of(make_scenario, evs, base_meta(moments=moment("e1", "zz")))
+    assert err.code == "UNKNOWN_MOMENT_EVENT" and err.event_ids == ["zz"]
+    err = code_of(make_scenario, evs, base_meta(moments=moment("e2", "e1")))
+    assert err.code == "UNKNOWN_MOMENT_EVENT"
+    load_scenario(make_scenario(evs, base_meta(moments=moment("e1", "e2"))))
+
+
+def test_meta_referential_integrity(make_scenario):
+    m = base_meta()
+    cases = {
+        "dup team": {**m, "teams": m["teams"] + [m["teams"][0]]},
+        "two homes": {**m, "teams": [{**m["teams"][0]}, {**m["teams"][1], "side": "home"}]},
+        "no away": {**m, "teams": [m["teams"][0]]},
+        "dup player": {**m, "players": m["players"] + [m["players"][0]]},
+        "player unknown team": {**m, "players": m["players"] + [
+            {"id": "zzz-01", "team_id": "zzz", "name": "x", "shirt_number": 1}]},
+    }
+    for name, meta in cases.items():
+        err = code_of(make_scenario, [ev()], meta)
+        assert err.code == "INVALID_META", name

@@ -91,16 +91,15 @@
       "default": null
     },
     "period": {
-      "enum": [
-        1,
-        2
-      ],
+      "maximum": 2,
+      "minimum": 1,
       "title": "Period",
       "type": "integer"
     },
     "player_id": {
       "anyOf": [
         {
+          "minLength": 1,
           "type": "string"
         },
         {
@@ -109,6 +108,45 @@
       ],
       "default": null,
       "title": "Player Id"
+    },
+    "possession_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Possession Id"
+    },
+    "pressured_player_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pressured Player Id"
+    },
+    "recipient_player_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recipient Player Id"
     },
     "scenario_seed": {
       "title": "Scenario Seed",
@@ -139,16 +177,32 @@
       "$ref": "#/$defs/EventType"
     },
     "x": {
-      "maximum": 105.0,
-      "minimum": 0.0,
-      "title": "X",
-      "type": "number"
+      "anyOf": [
+        {
+          "maximum": 105.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "X"
     },
     "y": {
-      "maximum": 68.0,
-      "minimum": 0.0,
-      "title": "Y",
-      "type": "number"
+      "anyOf": [
+        {
+          "maximum": 68.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Y"
     }
   },
   "required": [
@@ -159,8 +213,6 @@
     "event_time_ms",
     "team_id",
     "type",
-    "x",
-    "y",
     "scenario_seed",
     "synthetic"
   ],

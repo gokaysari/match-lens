@@ -18,6 +18,9 @@ def base_event(**over):
         "event_time_ms": 0,
         "team_id": "nbr",
         "player_id": "nbr-07",
+        "possession_id": "p01",
+        "recipient_player_id": "nbr-04",
+        "pressured_player_id": None,
         "type": "pass",
         "outcome": "complete",
         "x": 50.0,
@@ -43,11 +46,16 @@ def base_meta(**over):
         ],
         "players": [
             {"id": "nbr-07", "team_id": "nbr", "name": "N Seven", "shirt_number": 7},
+            {"id": "nbr-04", "team_id": "nbr", "name": "N Four", "shirt_number": 4},
+            {"id": "hba-04", "team_id": "hba", "name": "H Four", "shirt_number": 4},
             {"id": "hba-09", "team_id": "hba", "name": "H Nine", "shirt_number": 9},
         ],
         "moments": [
             {"key": "a", "description": "d", "first_event_id": "e1", "last_event_id": "e1"}
         ],
+        "initial_score": {"home": 0, "away": 0},
+        "segment_start_ms": 0,
+        "segment_end_ms": 10_000_000,
         "synthetic": True,
     }
     m.update(over)

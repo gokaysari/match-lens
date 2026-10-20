@@ -158,7 +158,7 @@
     },
     {
       "key": "b",
-      "description": "Harbour press high in Northbridge's half for about a minute; Northbridge pass completion drops.",
+      "description": "Harbour press in Northbridge's half for 60 seconds; Northbridge pass completion drops.",
       "first_event_id": "e024",
       "last_event_id": "e062"
     },
@@ -175,5 +175,11 @@
       "last_event_id": "e097"
     }
   ],
+  "initial_score": {
+    "home": 0,
+    "away": 0
+  },
+  "segment_start_ms": 3480000,
+  "segment_end_ms": 3720000,
   "synthetic": true
 }
