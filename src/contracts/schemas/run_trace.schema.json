@@ -1,12 +1,12 @@
 {
   "$defs": {
-    "Outcome": {
+    "InsightOutcome": {
       "enum": [
         "published",
         "fallback",
         "abstained"
       ],
-      "title": "Outcome",
+      "title": "InsightOutcome",
       "type": "string"
     },
     "Role": {
@@ -78,7 +78,7 @@
       "type": "string"
     },
     "outcome": {
-      "$ref": "#/$defs/Outcome"
+      "$ref": "#/$defs/InsightOutcome"
     },
     "run_id": {
       "minLength": 1,

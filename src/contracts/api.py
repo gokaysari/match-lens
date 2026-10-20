@@ -5,7 +5,7 @@ event with sequence `watermark_seq`. Nothing after the watermark is ever
 included. `snapshot_id` is "<match_id>@<watermark_seq>".
 
 Endpoints (all GET, JSON, served under /api):
-  /matches/{match_id}/meta                         -> ScenarioMeta (contracts.events)
+  /matches/{match_id}/meta                         -> MatchInfo (public; no scripted moments)
   /matches/{match_id}/snapshot?at_seq=N             -> Snapshot
   /matches/{match_id}/events?at_seq=N&from_seq=M     -> EventPage (events with M <= seq <= N;
                                                        at_seq defaults to the last event,
@@ -26,7 +26,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from contracts.events import SCHEMA_VERSION, MatchEvent, Score, SInt, SStr
+from contracts.events import SCHEMA_VERSION, MatchEvent, Player, Score, SInt, SStr, Team
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
@@ -35,6 +35,21 @@ class ApiError(BaseModel):
     model_config = _FROZEN
     code: SStr
     message: SStr
+
+
+class MatchInfo(BaseModel):
+    """What a client may know before the replay starts. ScenarioMeta's `moments`
+    and `title` describe the scripted future (test oracle) and are never served."""
+
+    model_config = _FROZEN
+    schema_version: Literal["1.0"] = SCHEMA_VERSION
+    match_id: SStr
+    teams: tuple[Team, ...]
+    players: tuple[Player, ...]
+    initial_score: Score
+    segment_start_ms: SInt
+    segment_end_ms: SInt
+    synthetic: Literal[True] = True
 
 
 class Snapshot(BaseModel):
