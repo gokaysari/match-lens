@@ -7,7 +7,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # allow running as a plain script
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from contracts.agents import AnalystOutput, EditorReview, Insight, RunTrace, StoryOutput
+from contracts.agents import AnalystOutput, EditorReview, Insight, RunTrace, StoryOutput, StoryReview
 from contracts.api import MatchInfo, ApiError, CardList, EventPage, Snapshot, WindowMetrics
 from contracts.events import MatchEvent, ScenarioMeta
 
@@ -27,6 +27,7 @@ def render_schemas() -> dict[str, str]:
         "analyst_output.schema.json": AnalystOutput,
         "editor_review.schema.json": EditorReview,
         "story_output.schema.json": StoryOutput,
+        "story_review.schema.json": StoryReview,
         "insight.schema.json": Insight,
         "run_trace.schema.json": RunTrace,
     }

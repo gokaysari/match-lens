@@ -7,7 +7,13 @@ Three LLM roles exchange typed, versioned artifacts (never a shared chat log):
       -> Evidence Editor       -> EditorReview    (approve / reject + repair hint)
       -> (one repair round max: Analyst again with the review)
       -> Audience Storyteller  -> StoryOutput     (persona variants of approved claims)
+      -> Evidence Editor       -> StoryReview     (does each variant say only what the
+                                                   approved claims say about their facts?)
+      -> (one repair round max: Storyteller again with the review / check codes)
       -> deterministic checks  -> Insight         (published, or a template fallback)
+
+Schema 2.0 (incompatible with 1.0: facts/placeholders, PublishedClaim, InsightOutcome,
+StoryReview, no MetricRef).
 
 Every artifact carries `candidate_id` + `snapshot_id`; a role can only write its
 own artifact and can never change events, metrics or scores. Every model output
@@ -29,7 +35,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from contracts.api import Card, MetricName, MetricValue
-from contracts.events import SCHEMA_VERSION, MatchEvent, SInt, SStr
+from contracts.events import MatchEvent, SInt, SStr
+
+AGENT_SCHEMA_VERSION = "2.0"
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
 
@@ -45,6 +53,7 @@ class Role(StrEnum):
     analyst = "tactical_analyst"
     editor = "evidence_editor"
     storyteller = "audience_storyteller"
+    story_editor = "evidence_editor_story"  # the editor's second job: review the story
     single = "single_agent_baseline"  # same inputs/outputs, one call (evaluation only)
 
 
@@ -56,7 +65,7 @@ class MomentCandidate(BaseModel):
     template Card). Agents never choose moments and never see the future."""
 
     model_config = _FROZEN
-    schema_version: Literal["1.0"] = SCHEMA_VERSION
+    schema_version: Literal["2.0"] = AGENT_SCHEMA_VERSION
     candidate_id: SStr  # "<match_id>/<card_id>"
     match_id: SStr
     snapshot_id: SStr  # watermark = trigger_seq of the source card
@@ -163,6 +172,25 @@ class StoryOutput(BaseModel):
     variants: tuple[PersonaText, ...]  # exactly one per Persona
 
 
+class VariantReview(BaseModel):
+    model_config = _FROZEN
+    persona: Persona
+    verdict: Verdict
+    reason: str = Field(min_length=1, max_length=280)
+
+
+class StoryReview(BaseModel):
+    """The Evidence Editor's check of the story: each variant may only restate what
+    its approved claims say (same team, same window, same fact meaning, no new
+    causes, places or qualities). Reviews the rendered text against claims + facts."""
+
+    model_config = _FROZEN
+    candidate_id: SStr
+    snapshot_id: SStr
+    reviews: tuple[VariantReview, ...]  # exactly one per Persona
+    repair_hint: str | None = None  # required when any variant is rejected
+
+
 # ---------------------------------------------------------------- result + trace
 
 
@@ -206,7 +234,7 @@ class Insight(BaseModel):
     variants are built from the deterministic source_card."""
 
     model_config = _FROZEN
-    schema_version: Literal["1.0"] = SCHEMA_VERSION
+    schema_version: Literal["2.0"] = AGENT_SCHEMA_VERSION
     insight_id: SStr  # = candidate_id
     match_id: SStr
     snapshot_id: SStr
