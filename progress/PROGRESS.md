@@ -59,7 +59,7 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 | Tek-agent karşılaştırma yolu (aynı girdi, aynı denetim) | Tamam (ölçüm yok) | `src/workflow/single_agent.py` |
 | Public'e uygunluk: özel linkler, kuralların kopyası, ham çıktılar depodan çıkarıldı | Tamam | `.gitignore`, `AGENTS.md` |
 
-**Testler (21 Ekim, `wip/facts-v2` dalında):** backend 352, web 62, tarayıcı e2e 9/9, hepsi yeşil. `npm audit` 0 açık.
+**Testler (21 Ekim, `main`):** backend 352, web 62, tarayıcı e2e 9/9, hepsi yeşil. `npm audit` 0 açık.
 
 **Önemli kararlar ve neden:**
 - *Sayılar yer tutucuyla.* Önceki tasarımda model sayıları serbest metne yazıyor, kod sonradan doğrulamaya çalışıyordu; inceleme turları beş kez uydurma sayının geçtiğini buldu ("48 of 52 passes", yanlış skor). Yeni tasarımda model hiç rakam yazmıyor.
@@ -70,7 +70,8 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 ## 4. Neredeyiz (21 Ekim akşamı)
 
 - **Çalışan:** sentetik maç replay'i, gerçek API'den skor/metrik/şablon kartlar, sahte modelle çalışan agent pipeline'ı (iki an yayınlanıyor).
-- **Bekleyen birleştirme:** `wip/facts-v2` dalı (yer tutucu tasarımı + uçtan uca incelemenin düzeltmeleri). Son bağımsız inceleme sürüyor; temiz çıkarsa `main`'e girecek.
+- **`main`'e girdi:** yer tutucu tasarımı ve uçtan uca incelemenin düzeltmeleri (`wip/facts-v2`). Bağımsız inceleme engelleyici bulmadı; 8 iyileştirme bulgusu çıktı.
+- **Devam eden (`wip/story-review`):** Evidence Editor artık hikâye metnini de inceleyecek (inceleme, doğru sayıların etrafında yanlış cümle kurulabildiğini gösterdi: pencerelerin yer değiştirmesi, golü yanlış takıma yazma); Storyteller'a bir düzeltme hakkı; "one up", "second goal", "brace" gibi sayı ifadeleri; "their half of the pitch" gibi yanlış retler; pencere sınırının devre/kesit başına kırpılması; web'de hızlı ileri-geri sonrası takılan istek ve "as of" etiketinin kontrastı.
 - **Henüz yok — 1. aşama (geçti/kaldı) riski:**
   1. Gerçek yapay zekâ modeli yok (Microsoft Foundry bağlantısı bekleniyor) → çalışan üründe Microsoft teknolojisi yok.
   2. Agent içgörüleri ve analist/taraftar seçimi arayüzde görünmüyor.
@@ -79,7 +80,7 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 
 ## 5. Sırada ne var (ayrıntı: [TODO.md](../TODO.md))
 
-1. `wip/facts-v2`'yi incelemeden geçirip `main`'e almak.
+1. `wip/story-review`'u incelemeden geçirip `main`'e almak.
 2. **Foundry model istemcisi**: gerçek modelle iki anın uçtan uca denenmesi, maliyet ve gecikmenin ölçülmesi.
 3. **İçgörüleri ürüne taşımak**: `/insights` uç noktası, analist/taraftar seçimi, sonuç rozeti (yayınlandı / yedek kart / çekimser), kanıtın sahada vurgulanması.
 4. **Dağıtım ve CI**: tek container, Azure Container Apps, GitHub Actions.
