@@ -11,12 +11,14 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 - [ ] Önceki sohbetteki fikir varsa elle buraya aktar; raporlardaki ürün kapsamı bunun yerine kurulmuş bir varsayım.
 - [x] `git init` (yerel, `main`).
 - [ ] Public GitHub deposu (yeni proje şartı, secret yok).
-- [ ] Tek sentetik senaryo + olay şeması (`match_id`, `event_id`, `sequence`, `event_time_ms`, `team_id`, `player_id`, `type`, `outcome`, koordinatlar, `scenario_seed`, `synthetic=true`).
+- [x] Tek sentetik senaryo + olay şeması: `src/contracts/events.py`, `src/domain/ingest.py`, `scenarios/synthetic-01` (97 olay, 4 an, 107 test; 2 düzeltme turu sonrası reviewer Spec ✅ Kalite ✅).
 
 ## 21 Ekim — uçtan uca ince dilim
 
 - [x] Klasör yapısı: `apps/web`, `services/api`, `src/{workflow,agents,domain,contracts}`, `scenarios`, `evals`, `docs`, `infra`.
-- [ ] Deterministik reducer + metrikler (`domain`), replay, skor, şablon kart.
+- [ ] Deterministik reducer (skor `initial_score` + goller) ve snapshot (`sequence` watermark).
+- [ ] Pencereli metrikler (pas isabeti, baskı sayısı, top kazanımı, şut) — sürümlü, event ID'li.
+- [ ] Replay API, skor, şablon kart.
 - [ ] Football MCP fixture'daki dört fonksiyonu gerçek veri katmanına taşı (önce doğrudan fonksiyon, MCP adaptörü sonra). Mevcut 11 test sözleşme testi olarak korunur.
 
 ## 22 Ekim — agentlar
