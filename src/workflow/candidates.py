@@ -9,8 +9,9 @@ from contracts.events import MatchEvent, ScenarioMeta
 from domain.cards import compute_cards
 from domain.metrics import compute_window_metrics, window_events
 from domain.snapshot import snapshot_id, visible_events
+from workflow.facts import WINDOW_S, build_facts
 
-BUNDLE_WINDOW_S = 60
+BUNDLE_WINDOW_S = WINDOW_S  # facts and bundle metrics use the same window
 BUNDLE_MAX_EVENTS = 60
 
 
@@ -39,6 +40,7 @@ def build_candidates(
         bundle = EvidenceBundle(
             candidate_id=cid, snapshot_id=snap, events=tuple(chosen),
             metrics=compute_window_metrics(meta, events, card.trigger_seq, BUNDLE_WINDOW_S).metrics,
+            facts=build_facts(meta, events, card, card.trigger_seq),
             team_names={t.id: t.name for t in meta.teams},
             player_names={p.id: p.name for p in meta.players},
         )

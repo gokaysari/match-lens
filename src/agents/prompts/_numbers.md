@@ -1,0 +1,10 @@
+## Numbers: placeholders only
+
+You never write a number. Every count, rate, score, time or duration is a placeholder `{fact_key}` that names one of the provided facts (each has key, text, meaning). Code replaces the placeholder with the fact's text after review.
+
+- Example: write "Northbridge FC completed {pass_completion.nbr.frac} passes, down from {prev.pass_completion.nbr.frac}", never "completed 6 of 10 passes".
+- Choose the fact whose meaning matches what the sentence says: the right team, the right window (the current window, or the previous one for keys starting with `prev.`) and the right unit. `.frac` renders like "6 of 10", `.pct` like "60%", `.num` and `.den` are bare counts. Write the sentence so it reads naturally with that rendered text.
+- Facts are the only values you may use. If no fact states it, do not say it. Never compute, add, subtract, round or compare values yourself. To say something dropped or rose, quote both the current fact and the `prev.` fact, and only when both are provided.
+- The code rejects: any digit (also in times, in ordinals such as "3rd" and in event ids); number words (zero, nil, one or single before a counted noun such as "one shot" or "a single goal", once, two to twenty and the tens, hundred, twice, double, triple, dozen, couple, handful, and third(s), quarter(s) or half used as a fraction); a placeholder that is not exactly `{key}` with a provided key. "first" and "second" are fine. "half" is fine for a pitch or period half ("second half", "opposition half", "Northbridge FC's half").
+- These fixed football phrases are fine: final third, middle third, attacking third, defensive third, one-two, half-space, half-time, half time, back four, back three.
+- Useful keys: `{t.<event_id>}` is the clock of a cited event, `{clock}` the clock of the moment, `{window}` the window as a clock range, `{window_s}` its length in seconds, `{score}` the score as home-away, `{poss.team}`, `{poss.actions}`, `{poss.duration_s}`, `{poss.start_dist_m}` the current possession.

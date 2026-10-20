@@ -7,14 +7,16 @@ from collections.abc import Callable, Sequence
 
 from agents.model import ModelClient
 from agents.prompts import PROMPT_VERSION, load_prompt
+from agents.render import placeholder_keys, render, used_facts
 from contracts.agents import (
     Claim,
     EvidenceBundle,
     Insight,
+    InsightOutcome,
     MomentCandidate,
-    Outcome,
     Persona,
     PersonaText,
+    PublishedClaim,
     Role,
     RunTrace,
     StepStatus,
@@ -50,6 +52,7 @@ class Recorder:
     async def call(self, model: ModelClient, role: Role, attempt: int, input_json: str,
                    timeout_s: float) -> str | None:
         remaining = self.total_s - (self.now() - self.t0)
+        budget_limited = remaining < timeout_s  # the total budget, not the role timeout, ends this call
         self.cur = (role, attempt)
         self._start = self.now()
         if remaining <= 0:
@@ -61,7 +64,7 @@ class Recorder:
                 timeout=min(timeout_s, remaining),
             )
         except asyncio.TimeoutError:
-            self._add(role, attempt, StepStatus.timeout, None)
+            self._add(role, attempt, StepStatus.timeout, "budget" if budget_limited else None)
             return None
         except Exception as exc:  # noqa: BLE001 - any model failure becomes a fallback
             self._add(role, attempt, StepStatus.error, type(exc).__name__)
@@ -75,7 +78,7 @@ class Recorder:
     def done(self, role: Role, attempt: int, status: StepStatus, codes: Sequence[str] = ()) -> None:
         self._add(role, attempt, status, ",".join(codes)[:400] or None)
 
-    def trace(self, candidate: MomentCandidate, outcome: Outcome) -> RunTrace:
+    def trace(self, candidate: MomentCandidate, outcome: InsightOutcome) -> RunTrace:
         return RunTrace(run_id=f"{candidate.candidate_id}/run", candidate_id=candidate.candidate_id,
                         snapshot_id=candidate.snapshot_id, steps=tuple(self.steps), outcome=outcome,
                         total_latency_ms=self._ms(self.t0))
@@ -102,31 +105,41 @@ def template_variants(candidate: MomentCandidate) -> tuple[PersonaText, ...]:
     )
 
 
-def _insight(candidate: MomentCandidate, outcome: Outcome, variants, claims, evidence, model_id) -> Insight:
+def _insight(candidate: MomentCandidate, outcome: InsightOutcome, variants, claims, facts, evidence,
+             model_id) -> Insight:
     return Insight(
         insight_id=candidate.candidate_id, match_id=candidate.match_id, snapshot_id=candidate.snapshot_id,
         trigger_seq=candidate.source_card.trigger_seq, trigger_clock_ms=candidate.trigger_clock_ms,
         expires_at_ms=candidate.expires_at_ms, outcome=outcome, variants=tuple(variants),
-        claims=tuple(claims), evidence_event_ids=tuple(evidence), model_id=model_id,
+        claims=tuple(claims), facts=tuple(facts), evidence_event_ids=tuple(evidence), model_id=model_id,
         prompt_version=PROMPT_VERSION,
     )
 
 
 def fallback_result(candidate: MomentCandidate, rec: Recorder, model: ModelClient,
-                    outcome: Outcome = Outcome.fallback) -> tuple[Insight, RunTrace]:
+                    outcome: InsightOutcome = InsightOutcome.fallback) -> tuple[Insight, RunTrace]:
     model_id = model.model_id if rec.model_ok else None
-    insight = _insight(candidate, outcome, template_variants(candidate), (),
+    insight = _insight(candidate, outcome, template_variants(candidate), (), (),
                        candidate.source_card.evidence_event_ids, model_id)
     return insight, rec.trace(candidate, outcome)
 
 
 def published_result(candidate: MomentCandidate, bundle: EvidenceBundle, rec: Recorder, model: ModelClient,
                      story: StoryOutput, claims: Sequence[Claim]) -> tuple[Insight, RunTrace]:
+    """Render the checked templates with the bundle's facts. Claims = those a variant cites;
+    facts = those the cited claims quote (in order of first use)."""
     seq = {e.event_id: e.sequence for e in bundle.events}
     cited = {cid for v in story.variants for cid in v.claim_ids}
     claims = [c for c in claims if c.claim_id in cited]
     ids = sorted({i for c in claims for i in c.evidence_event_ids}, key=seq.__getitem__)
+    facts = used_facts([c.text for c in claims], bundle.facts)
+    published = tuple(
+        PublishedClaim(claim_id=c.claim_id, kind=c.kind, text=render(c.text, facts), template=c.text,
+                       evidence_event_ids=c.evidence_event_ids,
+                       fact_keys=tuple(dict.fromkeys(placeholder_keys(c.text))))
+        for c in claims)
     order = {p: i for i, p in enumerate(Persona)}
-    variants = sorted(story.variants, key=lambda v: order[v.persona])
-    insight = _insight(candidate, Outcome.published, variants, claims, ids, model.model_id)
-    return insight, rec.trace(candidate, Outcome.published)
+    variants = [v.model_copy(update={"title": render(v.title, facts), "body": render(v.body, facts)})
+                for v in sorted(story.variants, key=lambda v: order[v.persona])]
+    insight = _insight(candidate, InsightOutcome.published, variants, published, facts, ids, model.model_id)
+    return insight, rec.trace(candidate, InsightOutcome.published)
