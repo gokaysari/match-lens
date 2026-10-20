@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "MetricName": {
+      "enum": [
+        "passes_attempted",
+        "passes_completed",
+        "pass_completion",
+        "pressures",
+        "ball_wins",
+        "high_ball_wins",
+        "shots",
+        "goals"
+      ],
+      "title": "MetricName",
+      "type": "string"
+    },
+    "MetricValue": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_version": {
+          "const": "metrics-v1",
+          "default": "metrics-v1",
+          "title": "Definition Version",
+          "type": "string"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denominator"
+        },
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "name": {
+          "$ref": "#/$defs/MetricName"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerator"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "count",
+            "ratio"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "team_id",
+        "value",
+        "unit",
+        "event_ids"
+      ],
+      "title": "MetricValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/MetricValue"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "synthetic": {
+      "const": true,
+      "default": true,
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "window_end_ms": {
+      "title": "Window End Ms",
+      "type": "integer"
+    },
+    "window_start_ms": {
+      "title": "Window Start Ms",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "match_id",
+    "snapshot_id",
+    "window_start_ms",
+    "window_end_ms",
+    "metrics"
+  ],
+  "title": "WindowMetrics",
+  "type": "object"
+}

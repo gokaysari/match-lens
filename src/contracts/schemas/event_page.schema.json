@@ -1,0 +1,262 @@
+{
+  "$defs": {
+    "EventType": {
+      "enum": [
+        "kick_off",
+        "pass",
+        "carry",
+        "dribble",
+        "pressure",
+        "tackle",
+        "interception",
+        "ball_recovery",
+        "clearance",
+        "shot",
+        "foul",
+        "out_of_play",
+        "substitution"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "MatchEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "end_x": {
+          "anyOf": [
+            {
+              "maximum": 105.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End X"
+        },
+        "end_y": {
+          "anyOf": [
+            {
+              "maximum": 68.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Y"
+        },
+        "event_id": {
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_time_ms": {
+          "minimum": 0,
+          "title": "Event Time Ms",
+          "type": "integer"
+        },
+        "match_id": {
+          "minLength": 1,
+          "title": "Match Id",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Outcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "period": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Period",
+          "type": "integer"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Id"
+        },
+        "possession_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Possession Id"
+        },
+        "pressured_player_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pressured Player Id"
+        },
+        "recipient_player_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipient Player Id"
+        },
+        "scenario_seed": {
+          "title": "Scenario Seed",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "synthetic": {
+          "const": true,
+          "title": "Synthetic",
+          "type": "boolean"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/EventType"
+        },
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 105.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
+        },
+        "y": {
+          "anyOf": [
+            {
+              "maximum": 68.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Y"
+        }
+      },
+      "required": [
+        "match_id",
+        "event_id",
+        "sequence",
+        "period",
+        "event_time_ms",
+        "team_id",
+        "type",
+        "scenario_seed",
+        "synthetic"
+      ],
+      "title": "MatchEvent",
+      "type": "object"
+    },
+    "Outcome": {
+      "enum": [
+        "complete",
+        "incomplete",
+        "won",
+        "lost",
+        "saved",
+        "blocked",
+        "off_target",
+        "goal"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/MatchEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "synthetic": {
+      "const": true,
+      "default": true,
+      "title": "Synthetic",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "match_id",
+    "snapshot_id",
+    "events"
+  ],
+  "title": "EventPage",
+  "type": "object"
+}
