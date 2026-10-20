@@ -7,7 +7,10 @@ included. `snapshot_id` is "<match_id>@<watermark_seq>".
 Endpoints (all GET, JSON, served under /api):
   /matches/{match_id}/meta                         -> ScenarioMeta (contracts.events)
   /matches/{match_id}/snapshot?at_seq=N             -> Snapshot
-  /matches/{match_id}/events?at_seq=N&from_seq=M     -> EventPage (events with M <= seq <= N)
+  /matches/{match_id}/events?at_seq=N&from_seq=M     -> EventPage (events with M <= seq <= N;
+                                                       at_seq defaults to the last event,
+                                                       from_seq to the first: the replay
+                                                       client loads the full timeline once)
   /matches/{match_id}/metrics?at_seq=N&window_s=60  -> WindowMetrics
   /matches/{match_id}/cards?at_seq=N                -> CardList
 `at_seq` must be the sequence of an existing event; otherwise 404 with code
