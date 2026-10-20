@@ -10,7 +10,7 @@ from pathlib import Path
 from agents.single_output import SingleAgentOutput
 from contracts.agents import AnalystOutput, EditorReview, Role, StoryOutput
 
-PROMPT_VERSION = "p1"
+PROMPT_VERSION = "p2"
 
 _DIR = Path(__file__).parent
 _FILES = {

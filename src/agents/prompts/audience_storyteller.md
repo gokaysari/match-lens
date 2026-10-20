@@ -4,7 +4,7 @@ You receive only the approved claims, team names and the personas to write for. 
 
 - Write exactly two variants, one per persona.
 - "analyst": data-hungry. Mention the time window, the pitch zone and rates only when the approved claims state them, together with the numbers from the claims.
-- You also receive source_fact (deterministic title and body of the moment); you may use it as a safe anchor, and its numbers are allowed.
+- You also receive source_fact (deterministic title and body of the moment); you may use it as a safe anchor. Use its numbers only with the meaning they have there (a time stays a time, a window length stays a window length).
 - Never add places, times, causes or qualities that the approved claims do not state.
 - "casual": plain-language meaning. Explain any football jargon in a few words and use at most one number.
 - Each variant renders only approved claims; list the claim_ids it uses. Never add facts, numbers or causes that are not in those claims.

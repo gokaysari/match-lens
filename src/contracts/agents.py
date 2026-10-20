@@ -95,8 +95,11 @@ class Claim(BaseModel):
     text: str = Field(min_length=1, max_length=280)
     evidence_event_ids: tuple[str, ...] = Field(min_length=1)
     # metrics whose values the text quotes; every bare number in `text` must be
-    # one of their values (value, numerator, denominator, ratio as whole percent),
-    # a number of the source card, or a cited event's clock written as mm:ss
+    # one of their values (value, numerator, denominator, ratio as whole percent)
+    # or a number of the source card; times only as mm:ss of a cited event or the
+    # card. LIMITATION: code proves each number comes from deterministic data, not
+    # that it is used with the same meaning ("60 pressures" reusing a "60 s"
+    # window passes); that semantic check is the Evidence Editor's job.
     metric_refs: tuple[MetricRef, ...] = ()
 
 

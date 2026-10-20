@@ -28,7 +28,7 @@ ONES = ("one two three four five six seven eight nine ten eleven twelve thirteen
 NUMBER_WORDS = tuple(w for w in ONES if w != "one") + (
     "hundred", "halves", "double", "doubled", "twice", "triple", "tripled", "third", "thirds",
     "quarter", "quarters", "fourth", "fifth", "sixth", "seventh", "eighth",
-    "ninth", "tenth")
+    "ninth", "tenth", "dozen", "dozens", "couple", "handful")
 # "one" is common English ("no one", "one of"); it counts as a number word only before these nouns
 ONE_COUNTED_NOUNS = ("goal", "pass", "passes", "shot", "shots", "chance", "press", "pressure", "minute",
                      "minutes")
@@ -47,7 +47,7 @@ def numbers_in(text: str) -> list[float]:
 
 _HALF = re.compile(r"\bhalf\b", re.I)
 _HALF_BEFORE_FRACTION = {"a", "by", "one"}
-_HALF_FOLLOW_FRACTION = {"of", "the", "as", "their", "his", "her", "its"}
+_HALF_FOLLOW_FRACTION = {"of", "the", "as", "their", "his", "her", "its", "a", "an"}
 _HALF_PITCH_BEFORE = {"first", "second", "own", "other", "opposite", "opposing", "opponent"}
 
 
@@ -85,6 +85,18 @@ def trigger_clock(candidate: MomentCandidate) -> tuple[int, int]:
     return (s // 60, s % 60)
 
 
+def clocks_in(text: str) -> set[tuple[int, int]]:
+    """Every mm:ss written in `text`."""
+    return {(int(m.group(1)), int(m.group(2))) for m in _TIME.finditer(text)}
+
+
+def card_clocks(candidate: MomentCandidate) -> set[tuple[int, int]]:
+    """Times the deterministic card states (incl. its trigger clock). They are
+    allowed as mm:ss only; their digits never become bare allowed numbers."""
+    card = candidate.source_card
+    return clocks_in(card.title + " " + card.body) | {trigger_clock(candidate)}
+
+
 def _strip_cited_clocks(text: str, clocks: set[tuple[int, int]]) -> str:
     def repl(m: re.Match) -> str:
         return " " if (int(m.group(1)), int(m.group(2))) in clocks else m.group(0)
@@ -114,7 +126,9 @@ def metric_numbers(m: MetricValue) -> set[float]:
 
 def card_numbers(candidate: MomentCandidate) -> set[float]:
     card = candidate.source_card
-    out = set(numbers_in(card.title)) | set(numbers_in(card.body))
+    clocks = card_clocks(candidate)
+    out = set(numbers_in(_strip_cited_clocks(card.title, clocks)))
+    out |= set(numbers_in(_strip_cited_clocks(card.body, clocks)))
     for m in card.metrics:
         out |= metric_numbers(m)
     return out
@@ -145,7 +159,7 @@ def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: Eviden
             codes.append(f"DUPLICATE_CLAIM_ID:{cid}")
         seen.add(c.claim_id)
         allowed = set(card_nums)
-        clocks: set[tuple[int, int]] = {trigger_clock(candidate)}
+        clocks: set[tuple[int, int]] = card_clocks(candidate)
         for eid in c.evidence_event_ids:
             ev = by_id.get(eid)
             if ev is None:
@@ -215,6 +229,7 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
     for v in story.variants:
         bodies.setdefault(v.persona, v.body)
         allowed = set(card_nums)
+        clocks = card_clocks(candidate)
         if not v.claim_ids:
             codes.append(f"NO_CLAIM_CITED:{v.persona.value}")
         for cid in v.claim_ids:
@@ -222,9 +237,13 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
             if claim is None:
                 codes.append(f"CLAIM_NOT_APPROVED:{safe_id(cid)}")
             else:
-                allowed |= set(numbers_in(claim.text))
+                # times the (already checked) claim states may be repeated as mm:ss;
+                # their digits are not counts
+                claim_clocks = clocks_in(claim.text)
+                clocks |= claim_clocks
+                allowed |= set(numbers_in(_strip_cited_clocks(claim.text, claim_clocks)))
         shown = v.title + " " + v.body
-        nums = numbers_in(_strip_cited_clocks(shown, {trigger_clock(candidate)}))
+        nums = numbers_in(_strip_cited_clocks(shown, clocks))
         for n in nums:
             if n not in allowed:
                 codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
