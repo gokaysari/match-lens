@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "KeyMoment": {
+      "additionalProperties": false,
+      "description": "A scripted key moment, addressed by an inclusive event_id range.",
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "first_event_id": {
+          "minLength": 1,
+          "title": "First Event Id",
+          "type": "string"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "last_event_id": {
+          "minLength": 1,
+          "title": "Last Event Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "description",
+        "first_event_id",
+        "last_event_id"
+      ],
+      "title": "KeyMoment",
+      "type": "object"
+    },
+    "Player": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "shirt_number": {
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Shirt Number",
+          "type": "integer"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "team_id",
+        "name",
+        "shirt_number"
+      ],
+      "title": "Player",
+      "type": "object"
+    },
+    "Team": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Side",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "side"
+      ],
+      "title": "Team",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "moments": {
+      "items": {
+        "$ref": "#/$defs/KeyMoment"
+      },
+      "title": "Moments",
+      "type": "array"
+    },
+    "players": {
+      "items": {
+        "$ref": "#/$defs/Player"
+      },
+      "title": "Players",
+      "type": "array"
+    },
+    "scenario_seed": {
+      "title": "Scenario Seed",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "synthetic": {
+      "const": true,
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "teams": {
+      "items": {
+        "$ref": "#/$defs/Team"
+      },
+      "title": "Teams",
+      "type": "array"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "match_id",
+    "scenario_seed",
+    "title",
+    "teams",
+    "players",
+    "moments",
+    "synthetic"
+  ],
+  "title": "ScenarioMeta",
+  "type": "object"
+}
