@@ -4,7 +4,7 @@ Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Eki
 
 ## Bugün (20 Ekim)
 
-- [ ] **Hackathon kaydını kontrol et / tamamla — 22:00'de kapanıyor.**
+- [x] Hackathon kaydı tamamlandı.
 - [ ] Kategori kararı: Best Multi-Agent mi, başka kategori mi?
 - [ ] Takım: tek kişi mi, en fazla 4 kişi mi? Takvimdeki kesintiler buna göre.
 - [ ] Gerçek model erişimi: Foundry aboneliği, bölge, model kotası, `az login` (Azure CLI kurulu değil).
