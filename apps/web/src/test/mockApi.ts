@@ -1,11 +1,11 @@
 import { vi } from "vitest";
 import type {
-  Card, CardList, EventPage, MatchEvent, MetricValue, ScenarioMeta, Snapshot, WindowMetrics,
+  Card, CardList, EventPage, MatchEvent, MetricValue, MatchInfo, Snapshot, WindowMetrics,
 } from "../api/types";
 import eventsJson from "./fixtures/events.json";
 import metaJson from "./fixtures/meta.json";
 
-export const meta = metaJson as unknown as ScenarioMeta;
+export const meta = metaJson as unknown as MatchInfo;
 export const events = eventsJson as unknown as MatchEvent[];
 export const MATCH = meta.match_id;
 

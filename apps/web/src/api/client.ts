@@ -1,5 +1,5 @@
 import type {
-  ApiErrorBody, CardList, EventPage, ScenarioMeta, Snapshot, WindowMetrics,
+  ApiErrorBody, CardList, EventPage, MatchInfo, Snapshot, WindowMetrics,
 } from "./types";
 
 const BASE = "/api";
@@ -39,7 +39,7 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 const m = (matchId: string) => `/matches/${encodeURIComponent(matchId)}`;
 
 export const getMeta = (matchId: string, signal?: AbortSignal) =>
-  get<ScenarioMeta>(`${m(matchId)}/meta`, signal);
+  get<MatchInfo>(`${m(matchId)}/meta`, signal);
 
 /** Full timeline (no at_seq): loaded once, the replay is driven locally. */
 export const getEvents = (matchId: string, signal?: AbortSignal) =>
