@@ -28,6 +28,8 @@ Requirements: Python 3.12, Node 26.
 cd apps/web && npm ci && npm run dev                                             # UI on http://127.0.0.1:5173
 ```
 
+Exact Python dependency versions (incl. transitive) are in `requirements.lock` (`.venv/bin/pip install -r requirements.lock`).
+
 Tests: `.venv/bin/pytest -q` (backend), `npm test` / `npm run typecheck` (web, in `apps/web`), `npm run e2e` (Playwright against the real API; first run `npx playwright install chromium`).
 
 Status: deterministic replay slice (synthetic scenario, score, window metrics, template cards, web replay). LLM agents not built yet. See `TODO.md`.

@@ -22,7 +22,7 @@ Hackathon entry: Microsoft Premier League "Inside the Game". Deadline 2026-10-28
 
 ## Agent team
 
-The main session is the lead developer: it plans, splits work into small tasks with file ownership and a done criterion, and integrates. Specialists in `.Codex/agents/` are called only when a task needs them:
+The main session is the lead developer: it plans, splits work into small tasks with file ownership and a done criterion, and integrates. Specialist development agents (kept locally, not in this repository) are called only when a task needs them:
 
 | Agent | Owns |
 |---|---|
