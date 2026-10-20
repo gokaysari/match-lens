@@ -1,0 +1,6 @@
+mcp-tests/node_modules/
+mcp-tests/.playwright-mcp/
+.env
+.env.*
+!.env.example
+.DS_Store

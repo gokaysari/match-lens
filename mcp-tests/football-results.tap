@@ -1,0 +1,80 @@
+
+> test
+> node --test --test-reporter=tap football.test.mjs
+
+TAP version 13
+# Subtest: exactly four read-only tools; no write or reset tool
+ok 1 - exactly four read-only tools; no write or reset tool
+  ---
+  duration_ms: 3.872083
+  type: 'test'
+  ...
+# Subtest: snapshot and deterministic metric preserve evidence IDs
+ok 2 - snapshot and deterministic metric preserve evidence IDs
+  ---
+  duration_ms: 1.498208
+  type: 'test'
+  ...
+# Subtest: every requested metric is computed separately
+ok 3 - every requested metric is computed separately
+  ---
+  duration_ms: 0.342458
+  type: 'test'
+  ...
+# Subtest: unknown evidence is an explicit error naming the IDs
+ok 4 - unknown evidence is an explicit error naming the IDs
+  ---
+  duration_ms: 0.483792
+  type: 'test'
+  ...
+# Subtest: future event evidence is rejected
+ok 5 - future event evidence is rejected
+  ---
+  duration_ms: 0.437292
+  type: 'test'
+  ...
+# Subtest: the access limit follows the snapshot watermark, not a constant
+ok 6 - the access limit follows the snapshot watermark, not a constant
+  ---
+  duration_ms: 0.956542
+  type: 'test'
+  ...
+# Subtest: future range and wrong match/snapshot are rejected
+ok 7 - future range and wrong match/snapshot are rejected
+  ---
+  duration_ms: 0.522208
+  type: 'test'
+  ...
+# Subtest: truncation, range and metric allowlist are explicit
+ok 8 - truncation, range and metric allowlist are explicit
+  ---
+  duration_ms: 0.575166
+  type: 'test'
+  ...
+# Subtest: untrusted event text stays text; snapshot does not mutate
+ok 9 - untrusted event text stays text; snapshot does not mutate
+  ---
+  duration_ms: 0.474
+  type: 'test'
+  ...
+# Subtest: slow MCP request times out and chooses a safe fallback
+ok 10 - slow MCP request times out and chooses a safe fallback
+  ---
+  duration_ms: 612.927292
+  type: 'test'
+  ...
+# Subtest: crashed MCP server process is detected by the client
+ok 11 - crashed MCP server process is detected by the client
+  ---
+  duration_ms: 111.058208
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 929.925959
