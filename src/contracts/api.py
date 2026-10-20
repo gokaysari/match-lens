@@ -13,8 +13,10 @@ Endpoints (all GET, JSON, served under /api):
                                                        client loads the full timeline once)
   /matches/{match_id}/metrics?at_seq=N&window_s=60  -> WindowMetrics
   /matches/{match_id}/cards?at_seq=N                -> CardList
-`at_seq` must be the sequence of an existing event; otherwise 404 with code
-UNKNOWN_SEQUENCE. Unknown match -> 404 UNKNOWN_MATCH. Errors use ApiError.
+`at_seq` is REQUIRED on snapshot, metrics and cards (missing -> 422
+INVALID_QUERY; only /events defaults it) and must be the sequence of an
+existing event; otherwise 404 with code UNKNOWN_SEQUENCE.
+Windows never cross periods: a window covers events of the watermark's period only. Unknown match -> 404 UNKNOWN_MATCH. Errors use ApiError.
 """
 
 from __future__ import annotations
@@ -65,6 +67,7 @@ class MetricName(StrEnum):
     passes_completed = "passes_completed"
     pass_completion = "pass_completion"  # ratio 0..1; None when no attempts
     pressures = "pressures"
+    pressures_opp_half = "pressures_opp_half"  # pressures located in the opponent's half
     ball_wins = "ball_wins"  # tackle won + interception + ball_recovery
     high_ball_wins = "high_ball_wins"  # ball wins in the opponent half
     shots = "shots"

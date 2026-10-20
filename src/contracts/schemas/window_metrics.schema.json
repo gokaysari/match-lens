@@ -6,6 +6,7 @@
         "passes_completed",
         "pass_completion",
         "pressures",
+        "pressures_opp_half",
         "ball_wins",
         "high_ball_wins",
         "shots",
