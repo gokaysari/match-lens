@@ -10,7 +10,7 @@ _SRC = str(Path(__file__).resolve().parents[2] / "src")
 if _SRC not in sys.path:  # lets `uvicorn --app-dir services/api` find contracts/domain
     sys.path.insert(0, _SRC)
 
-from fastapi import FastAPI  # noqa: E402, Query, Request
+from fastapi import FastAPI, Query, Request  # noqa: E402
 from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
