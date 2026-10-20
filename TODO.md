@@ -1,6 +1,6 @@
 # Yapılacaklar
 
-Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar §1). Sıra, 21 Ekim uçtan uca incelemesine göre önceliklendirildi; her adım bir öncekinin çıktısına dayanıyor.
+Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar §1). Sıra, 21 Ekim uçtan uca incelemesine göre önceliklendirildi; her adım bir öncekinin çıktısına dayanıyor. Ekip için özet durum: [progress/PROGRESS.md](progress/PROGRESS.md).
 
 ## Tamamlananlar
 
@@ -54,7 +54,7 @@ Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar
 
 ## 7. Teslim (26–27 Ekim)
 
-- [ ] Geçmiş temizliği: `git filter-repo` ile kaldırılan yollar ve e-posta (GitHub noreply); yalnız `main` push; worktree dallarını silme.
+- [ ] Geçmiş temizliği (`git filter-repo`, kurulmalı): kaldırılan yollar, e-posta → GitHub noreply, commit mesajlarındaki `Co-Authored-By` / araç ibareleri silinir; yalnız `main` push; worktree dallarını sil.
 - [ ] İngilizce: README (pitch, kurulum, test erişimi), `docs/` (mimari, değerlendirme sonuçları, sınırlamalar); bu dosya ya çevrilir ya da depodan çıkarılır.
 - [ ] < 2 dakikalık video (problem → replay + persona → kanıt zinciri → hata toparlama → ölçüm ve Microsoft stack).
 - [ ] Ölçülmemiş iddia yok ("real time", "hallucination-free" vb.); resmî Microsoft/Premier League ürünü izlenimi yok; sayı denetiminin sınırı belgelenir.
