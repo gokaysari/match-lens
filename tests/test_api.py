@@ -6,7 +6,7 @@ from conftest import ROOT, SCENARIO_DIR
 from fastapi.testclient import TestClient
 
 from app import create_app
-from contracts.api import ApiError, CardList, EventPage, Snapshot, WindowMetrics
+from contracts.api import ApiError, MatchInfo, CardList, EventPage, Snapshot, WindowMetrics
 from contracts.events import ScenarioMeta
 from domain.ingest import IngestError
 
@@ -25,7 +25,18 @@ def seqs():
 def test_meta(client):
     r = client.get("/api/matches/synthetic-01/meta")
     assert r.status_code == 200
-    assert ScenarioMeta.model_validate(r.json()).match_id == "synthetic-01"
+    assert MatchInfo.model_validate(r.json()).match_id == "synthetic-01"
+    assert "moments" not in r.json() and "title" not in r.json()
+    for line in (SCENARIO_DIR / "events.jsonl").read_text().splitlines():
+        assert json.loads(line)["event_id"] not in r.text
+
+
+def test_duplicate_match_id_refused(tmp_path):
+    for n in ("a", "b"):
+        shutil.copytree(SCENARIO_DIR, tmp_path / n)
+    with pytest.raises(IngestError) as ei:
+        create_app(tmp_path)
+    assert ei.value.code == "DUPLICATE_MATCH"
 
 
 def test_snapshot_at_goal(client):
