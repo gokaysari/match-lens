@@ -5,16 +5,17 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from contracts.api import Card, CardKind, CardList, MetricName, MetricValue
+from contracts.api import Card, CardKind, CardList, MetricName
 from contracts.events import EventType, MatchEvent, ScenarioMeta
-from domain.metrics import in_half_of_opponent, team_metrics, window_events
+from domain.metrics import team_metrics, window_events
 from domain.snapshot import is_goal, score_after, snapshot_id, visible_events
 
 GOAL_CARD_TTL_MS = 60_000
 PRESS_SURGE_TTL_MS = 45_000
 PRESS_WINDOW_S = 60
 PRESS_MIN_PRESSURES = 10
-PRESS_MAX_OPP_PASS_COMPLETION = 0.6
+# opponent pass completion <= 3/5 (0.6), compared with integers: n * DEN <= d * NUM
+PRESS_MAX_OPP_COMPLETION_NUM, PRESS_MAX_OPP_COMPLETION_DEN = 3, 5
 PRESS_MIN_OPP_PASS_ATTEMPTS = 5
 PRESS_COOLDOWN_MS = 120_000
 
@@ -29,7 +30,9 @@ def _goal_card(meta: ScenarioMeta, vis: Sequence[MatchEvent], goal: MatchEvent) 
     home = next(t for t in meta.teams if t.side == "home")
     away = next(t for t in meta.teams if t.side == "away")
     score, _ = score_after(meta, vis)
-    evidence = tuple(e.event_id for e in vis if e.possession_id == goal.possession_id)
+    earlier = {e.event_id for e in vis if is_goal(e) and e.sequence < goal.sequence}
+    evidence = tuple(e.event_id for e in vis
+                     if e.possession_id == goal.possession_id or e.event_id in earlier)
     return Card(
         card_id=f"{CardKind.goal.value}@{goal.sequence}", kind=CardKind.goal,
         title=f"Goal - {team.name}",
@@ -41,20 +44,19 @@ def _goal_card(meta: ScenarioMeta, vis: Sequence[MatchEvent], goal: MatchEvent) 
     )
 
 
-def _press_card(meta: ScenarioMeta, vis: Sequence[MatchEvent], pressing, opp) -> Card | None:
+def _press_card(vis: Sequence[MatchEvent], pressing, opp) -> Card | None:
     """vis ends at the candidate trigger event. Returns the card if the condition holds."""
     last = vis[-1]
     _, _, win = window_events(vis, PRESS_WINDOW_S)
-    press = [e for e in win if e.team_id == pressing.id and e.type == EventType.pressure
-             and in_half_of_opponent(pressing.side, e.x)]
-    if len(press) < PRESS_MIN_PRESSURES:
+    pressures = next(m for m in team_metrics(pressing.id, pressing.side, win)
+                     if m.name == MetricName.pressures_opp_half)
+    if pressures.value < PRESS_MIN_PRESSURES:
         return None
     pc = next(m for m in team_metrics(opp.id, opp.side, win) if m.name == MetricName.pass_completion)
-    if (pc.denominator or 0) < PRESS_MIN_OPP_PASS_ATTEMPTS or pc.value is None \
-            or pc.value > PRESS_MAX_OPP_PASS_COMPLETION:
+    if pc.denominator < PRESS_MIN_OPP_PASS_ATTEMPTS or (
+        pc.numerator * PRESS_MAX_OPP_COMPLETION_DEN > pc.denominator * PRESS_MAX_OPP_COMPLETION_NUM
+    ):
         return None
-    pressures = MetricValue(name=MetricName.pressures, team_id=pressing.id, value=float(len(press)),
-                            unit="count", event_ids=tuple(e.event_id for e in press))
     seq_of = {e.event_id: e.sequence for e in vis}
     evidence = tuple(sorted(set(pressures.event_ids) | set(pc.event_ids), key=seq_of.__getitem__))
     return Card(
@@ -72,18 +74,24 @@ def compute_cards(meta: ScenarioMeta, events: Sequence[MatchEvent], watermark_se
     vis = visible_events(events, watermark_seq)
     cards: list[Card] = []
     last_press_clock: dict[str, int] = {}
+    armed: dict[str, bool] = {}  # False after a trigger until the condition was seen false
     for i, e in enumerate(vis):
         prefix = vis[: i + 1]
         if is_goal(e):
             cards.append(_goal_card(meta, prefix, e))
         for pressing in meta.teams:
-            prev = last_press_clock.get(pressing.id)
-            if prev is not None and e.event_time_ms < prev + PRESS_COOLDOWN_MS:
-                continue
             opp = next(t for t in meta.teams if t.id != pressing.id)
-            card = _press_card(meta, prefix, pressing, opp)
-            if card is not None:
-                cards.append(card)
-                last_press_clock[pressing.id] = e.event_time_ms
+            card = _press_card(prefix, pressing, opp)
+            if card is None:
+                armed[pressing.id] = True
+                continue
+            prev = last_press_clock.get(pressing.id)
+            if prev is not None and (
+                not armed.get(pressing.id, True) or e.event_time_ms < prev + PRESS_COOLDOWN_MS
+            ):
+                continue
+            cards.append(card)
+            last_press_clock[pressing.id] = e.event_time_ms
+            armed[pressing.id] = False
     return CardList(match_id=meta.match_id, snapshot_id=snapshot_id(meta, watermark_seq),
                     cards=tuple(cards))

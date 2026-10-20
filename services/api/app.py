@@ -24,11 +24,13 @@ from domain.metrics import WINDOW_S_DEFAULT, WINDOW_S_MAX, WINDOW_S_MIN, compute
 from domain.snapshot import build_snapshot, snapshot_id, visible_events  # noqa: E402
 
 DEFAULT_SCENARIOS_DIR = Path(__file__).resolve().parents[2] / "scenarios"
-_STATUS = {"UNKNOWN_MATCH": 404, "UNKNOWN_SEQUENCE": 404, "INVALID_QUERY": 422, "INVALID_WINDOW": 422}
+_STATUS = {"UNKNOWN_MATCH": 404, "UNKNOWN_SEQUENCE": 404, "UNKNOWN_EVENT": 404,
+           "FUTURE_EVENT_FORBIDDEN": 404, "INVALID_QUERY": 422, "INVALID_WINDOW": 422}
 
 
-def _error(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(ApiError(code=code, message=message).model_dump(), status_code=status)
+def _error(status: int, code: str, message: str, headers: dict | None = None) -> JSONResponse:
+    return JSONResponse(ApiError(code=code, message=message).model_dump(), status_code=status,
+                        headers=headers)
 
 
 def load_matches(directory: Path) -> dict[str, tuple[ScenarioMeta, list[MatchEvent]]]:
@@ -43,12 +45,16 @@ def load_matches(directory: Path) -> dict[str, tuple[ScenarioMeta, list[MatchEve
 def create_app(scenarios_dir: str | Path | None = None) -> FastAPI:
     directory = Path(scenarios_dir or os.environ.get("MATCHLENS_SCENARIOS_DIR") or DEFAULT_SCENARIOS_DIR)
     matches = load_matches(directory)
+    # Full card list once per match; valid for any at_seq because cards are watermark-stable.
+    all_cards = {mid: compute_cards(m, ev, ev[-1].sequence) for mid, (m, ev) in matches.items()}
 
     app = FastAPI(title="Match Lens replay API", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.exception_handler(DomainError)
     async def _domain(_: Request, exc: DomainError):
-        return _error(_STATUS.get(exc.code, 422), exc.code, exc.message)
+        if exc.code not in _STATUS:
+            return _error(500, "INTERNAL", "unexpected domain error")
+        return _error(_STATUS[exc.code], exc.code, exc.message)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):
@@ -59,7 +65,7 @@ def create_app(scenarios_dir: str | Path | None = None) -> FastAPI:
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
         code = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(exc.status_code, "HTTP_ERROR")
-        return _error(exc.status_code, code, str(exc.detail))
+        return _error(exc.status_code, code, str(exc.detail), dict(exc.headers or {}))
 
     def match(match_id: str) -> tuple[ScenarioMeta, list[MatchEvent]]:
         if match_id not in matches:
@@ -76,9 +82,9 @@ def create_app(scenarios_dir: str | Path | None = None) -> FastAPI:
         return match(match_id)[0]
 
     @app.get("/api/matches/{match_id}/snapshot", response_model=Snapshot, responses=R)
-    def get_snapshot(match_id: str, at_seq: int | None = None):
+    def get_snapshot(match_id: str, at_seq: int):
         meta, events = match(match_id)
-        return build_snapshot(meta, events, watermark(events, at_seq))
+        return build_snapshot(meta, events, at_seq)
 
     @app.get("/api/matches/{match_id}/events", response_model=EventPage, responses=R)
     def get_events(match_id: str, at_seq: int | None = None, from_seq: int | None = None):
@@ -92,15 +98,17 @@ def create_app(scenarios_dir: str | Path | None = None) -> FastAPI:
                          events=tuple(e for e in vis if e.sequence >= lo))
 
     @app.get("/api/matches/{match_id}/metrics", response_model=WindowMetrics, responses=R)
-    def get_metrics(match_id: str, at_seq: int | None = None,
+    def get_metrics(match_id: str, at_seq: int,
                     window_s: int = Query(WINDOW_S_DEFAULT, ge=WINDOW_S_MIN, le=WINDOW_S_MAX)):
         meta, events = match(match_id)
-        return compute_window_metrics(meta, events, watermark(events, at_seq), window_s)
+        return compute_window_metrics(meta, events, at_seq, window_s)
 
     @app.get("/api/matches/{match_id}/cards", response_model=CardList, responses=R)
-    def get_cards(match_id: str, at_seq: int | None = None):
+    def get_cards(match_id: str, at_seq: int):
         meta, events = match(match_id)
-        return compute_cards(meta, events, watermark(events, at_seq))
+        visible_events(events, at_seq)  # UNKNOWN_SEQUENCE check
+        return CardList(match_id=meta.match_id, snapshot_id=snapshot_id(meta, at_seq),
+                        cards=tuple(c for c in all_cards[match_id].cards if c.trigger_seq <= at_seq))
 
     return app
 

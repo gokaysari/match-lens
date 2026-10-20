@@ -11,7 +11,6 @@ from contracts.events import ScenarioMeta
 from domain.ingest import IngestError
 
 E066_SEQ = 2066
-LAST_SEQ = 2097  # checked below against the data
 
 
 @pytest.fixture(scope="module")
@@ -37,9 +36,10 @@ def test_snapshot_at_goal(client):
     assert s.snapshot_id == f"synthetic-01@{E066_SEQ}"
 
 
-def test_snapshot_defaults_to_last(client):
-    s = Snapshot.model_validate(client.get("/api/matches/synthetic-01/snapshot").json())
-    assert s.watermark_seq == max(seqs())
+@pytest.mark.parametrize("ep", ["snapshot", "metrics", "cards"])
+def test_at_seq_required(client, ep):
+    r = client.get(f"/api/matches/synthetic-01/{ep}")
+    assert r.status_code == 422 and ApiError.model_validate(r.json()).code == "INVALID_QUERY"
 
 
 def test_events_default_range_returns_all(client):
@@ -66,11 +66,12 @@ def test_metrics(client):
     r = client.get(f"/api/matches/synthetic-01/metrics?at_seq={E066_SEQ}&window_s=30")
     assert r.status_code == 200
     wm = WindowMetrics.model_validate(r.json())
-    assert wm.window_end_ms - wm.window_start_ms == 30_000 and len(wm.metrics) == 16
+    assert wm.window_end_ms - wm.window_start_ms == 30_000 and len(wm.metrics) == 18
 
 
 def test_metrics_default_window(client):
-    wm = WindowMetrics.model_validate(client.get("/api/matches/synthetic-01/metrics").json())
+    wm = WindowMetrics.model_validate(
+        client.get(f"/api/matches/synthetic-01/metrics?at_seq={E066_SEQ}").json())
     assert wm.window_end_ms - wm.window_start_ms == 60_000
 
 
@@ -90,7 +91,7 @@ def test_unknown_sequence_404(client, ep):
 
 @pytest.mark.parametrize("ep", ["meta", "snapshot", "events", "metrics", "cards"])
 def test_unknown_match_404(client, ep):
-    r = client.get(f"/api/matches/nope/{ep}")
+    r = client.get(f"/api/matches/nope/{ep}?at_seq=2001")
     assert r.status_code == 404
     assert ApiError.model_validate(r.json()).code == "UNKNOWN_MATCH"
 
@@ -129,3 +130,24 @@ def test_refuses_broken_scenario_dir(tmp_path):
 def test_env_scenarios_dir(monkeypatch):
     monkeypatch.setenv("MATCHLENS_SCENARIOS_DIR", str(ROOT / "scenarios"))
     assert TestClient(create_app()).get("/api/matches/synthetic-01/meta").status_code == 200
+
+
+def test_405_carries_allow_header(client):
+    r = client.post("/api/matches/synthetic-01/snapshot")
+    assert "GET" in r.headers.get("allow", "")
+
+
+def test_domain_error_mapping_and_internal(client):
+    from fastapi import FastAPI
+    from domain.errors import DomainError
+    app = create_app(ROOT / "scenarios")
+
+    @app.get("/boom/{code}")
+    def boom(code: str):
+        raise DomainError(code, "x")
+
+    c = TestClient(app, raise_server_exceptions=False)
+    assert c.get("/boom/UNKNOWN_EVENT").status_code == 404
+    assert c.get("/boom/FUTURE_EVENT_FORBIDDEN").status_code == 404
+    r = c.get("/boom/SOMETHING_NEW")
+    assert r.status_code == 500 and ApiError.model_validate(r.json()).code == "INTERNAL"

@@ -132,8 +132,8 @@ def test_metrics_tiny_hand_built():
         ev(10, 10000, type_="shot", outcome="goal", x=90.0),
     ]
     wm = compute_window_metrics(META, events, 10)
-    assert [m.team_id for m in wm.metrics] == ["nbr"] * 8 + ["hba"] * 8
-    assert [m.name for m in wm.metrics[:8]] == list(MetricName)
+    assert [m.team_id for m in wm.metrics] == ["nbr"] * 9 + ["hba"] * 9
+    assert [m.name for m in wm.metrics[:9]] == list(MetricName)
     n = lambda name, t="nbr": metric(wm, name, t)  # noqa: E731
     assert n(MetricName.passes_attempted).value == 2
     assert n(MetricName.passes_attempted).event_ids == ("e1", "e2")
@@ -146,6 +146,8 @@ def test_metrics_tiny_hand_built():
     assert n(MetricName.shots).value == 1 and n(MetricName.goals).event_ids == ("e10",)
     assert n(MetricName.pressures).value == 0 and n(MetricName.pressures).unit == "count"
     assert n(MetricName.pressures, "hba").event_ids == ("e3",)
+    assert n(MetricName.pressures_opp_half, "hba").event_ids == ()  # x=60 is hba's own half
+    assert n(MetricName.pressures_opp_half, "hba").value == 0
     assert n(MetricName.ball_wins, "hba").event_ids == ("e6", "e7", "e8")
     assert n(MetricName.high_ball_wins, "hba").event_ids == ("e6",)
     hpc = n(MetricName.pass_completion, "hba")
@@ -170,9 +172,7 @@ def test_window_s_out_of_range(w):
     assert ei.value.code == "INVALID_WINDOW"
 
 
-def test_metrics_reject_missing_x_not_high():
-    # shot/clearance etc fine; a win without x cannot be built (x required), so just check
-    # that high_ball_wins is a subset of ball_wins on real data
+def test_high_ball_wins_subset_of_ball_wins_on_synthetic_data():
     meta, events = load_scenario(SCENARIO_DIR)
     wm = compute_window_metrics(meta, events, events[-1].sequence, window_s=600)
     for t in ("nbr", "hba"):
@@ -205,7 +205,6 @@ def test_cards_synthetic_01(synth):
     assert presses[0].expires_at_ms == presses[0].trigger_clock_ms + PRESS_SURGE_TTL_MS
     assert [c.trigger_seq for c in cards] == sorted(c.trigger_seq for c in cards)
     assert not any("Northbridge" in c.title for c in presses)
-    print([(c.card_id, c.title, c.body) for c in cards])
 
 
 def test_card_stability_and_evidence_resolution(synth):
@@ -229,7 +228,7 @@ def test_press_body_numbers_equal_metric_values(synth):
     meta, events = synth
     card = next(c for c in compute_cards(meta, events, events[-1].sequence).cards
                 if c.kind == CardKind.press_surge)
-    pressures = next(m for m in card.metrics if m.name == MetricName.pressures)
+    pressures = next(m for m in card.metrics if m.name == MetricName.pressures_opp_half)
     pc = next(m for m in card.metrics if m.name == MetricName.pass_completion)
     assert pressures.team_id == "hba" and pc.team_id == "nbr"
     assert pressures.value >= PRESS_MIN_PRESSURES
@@ -293,3 +292,91 @@ def test_press_surge_ignores_pressures_in_own_half():
     events = [ev(i, 1000 * i, outcome="incomplete") for i in range(1, 6)]
     events += [_pressure(5 + i, 6000 + 1000 * i, x=80.0) for i in range(1, 11)]
     assert compute_cards(meta, events, events[-1].sequence).cards == ()
+
+
+# ---- fix round 1 ------------------------------------------------------------
+
+def test_window_never_crosses_periods():
+    p1 = ev(1, 2_700_500, period=1)           # stoppage time, clock later than first p2 event
+    p2a = ev(2, 2_700_000, period=2)
+    p2b = ev(3, 2_705_000, period=2)
+    # period/clock regression is only legal across periods
+    wm = compute_window_metrics(META, [p1, p2a, p2b], 3, window_s=60)
+    assert metric(wm, MetricName.passes_attempted, "nbr").event_ids == ("e2", "e3")
+    wm2 = compute_window_metrics(META, [p1, p2a, p2b], 2, window_s=60)
+    assert metric(wm2, MetricName.passes_attempted, "nbr").event_ids == ("e2",)
+
+
+def test_pressures_opp_half_both_teams():
+    events = [
+        _pressure(1, 1000, team="hba", x=20.0),   # hba presses in nbr half -> counted
+        _pressure(2, 2000, team="hba", x=80.0),   # own half
+        _pressure(3, 3000, team="nbr", x=80.0),   # nbr presses in hba half -> counted
+        _pressure(4, 4000, team="nbr", x=52.5),   # boundary
+    ]
+    wm = compute_window_metrics(META, events, 4)
+    assert metric(wm, MetricName.pressures_opp_half, "hba").event_ids == ("e1",)
+    assert metric(wm, MetricName.pressures_opp_half, "nbr").event_ids == ("e3",)
+    assert metric(wm, MetricName.pressures, "nbr").value == 2
+
+
+def test_card_metric_equals_endpoint_metric_at_trigger(synth):
+    meta, events = synth
+    card = next(c for c in compute_cards(meta, events, events[-1].sequence).cards
+                if c.kind == CardKind.press_surge)
+    wm = compute_window_metrics(meta, events, card.trigger_seq)
+    q = next(m for m in wm.metrics if m.name == MetricName.pressures_opp_half and m.team_id == "hba")
+    assert q in card.metrics
+
+
+def test_continuous_press_yields_one_card():
+    meta = ScenarioMeta.model_validate(base_meta(initial_score={"home": 0, "away": 0}))
+    events = [ev(i, 1000 * i, outcome="incomplete") for i in range(1, 6)]
+    n = 5
+    for k in range(1, 400):  # ~ 400 s of continuous pressing and failing passes
+        n += 1
+        events.append(_pressure(n, 5000 + 1000 * k))
+        if k % 5 == 0:
+            n += 1
+            events.append(ev(n, 5000 + 1000 * k + 500, outcome="incomplete"))
+    assert events[-1].event_time_ms > 5000 + 2 * PRESS_COOLDOWN_MS
+    ids = [c.card_id for c in compute_cards(meta, events, events[-1].sequence).cards]
+    assert len(ids) == 1
+
+
+def test_press_rearms_after_condition_false():
+    meta = ScenarioMeta.model_validate(base_meta(initial_score={"home": 0, "away": 0}))
+    events, n = [], 0
+    for i in range(5):
+        n += 1; events.append(ev(n, 1000 * n, outcome="incomplete"))
+    for _ in range(10):
+        n += 1; events.append(_pressure(n, 1000 * n))
+    # quiet period: condition becomes false (window empties), then a fresh surge after cooldown
+    base = 300_000
+    for i in range(5):
+        n += 1; events.append(ev(n, base + 10 * i, outcome="incomplete"))
+    for k in range(10):
+        n += 1; events.append(_pressure(n, base + 1000 + 10 * k))
+    assert len(compute_cards(meta, events, n).cards) == 2
+
+
+def test_goal_card_evidence_includes_earlier_goals():
+    meta = ScenarioMeta.model_validate(base_meta(initial_score={"home": 0, "away": 0}))
+    events = [
+        ev(1, 1000, type_="shot", outcome="goal", possession_id="pa"),
+        ev(2, 2000, possession_id="pb"),
+        ev(3, 3000, type_="shot", outcome="goal", possession_id="pb"),
+    ]
+    cards = compute_cards(meta, events, 3).cards
+    assert [c.card_id for c in cards] == ["goal@1", "goal@3"]
+    assert cards[0].evidence_event_ids == ("e1",)
+    assert cards[1].evidence_event_ids == ("e1", "e2", "e3")
+    assert cards[1].body.endswith("Northbridge FC 2-0 Harbour Athletic.")
+
+
+def test_cached_equals_uncached_for_every_sequence(synth):
+    meta, events = synth
+    full = compute_cards(meta, events, events[-1].sequence)
+    for e in events:
+        assert compute_cards(meta, events, e.sequence).cards == tuple(
+            c for c in full.cards if c.trigger_seq <= e.sequence)

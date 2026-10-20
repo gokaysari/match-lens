@@ -34,7 +34,8 @@ def _count(name: MetricName, team_id: str, evs: Sequence[MatchEvent]) -> MetricV
 def window_events(visible: Sequence[MatchEvent], window_s: int) -> tuple[int, int, list[MatchEvent]]:
     end = visible[-1].event_time_ms
     start = end - window_s * 1000
-    return start, end, [e for e in visible if start < e.event_time_ms <= end]
+    return start, end, [e for e in visible
+                 if e.period == visible[-1].period and start < e.event_time_ms <= end]
 
 
 def team_metrics(team_id: str, side: str, win: Sequence[MatchEvent]) -> list[MetricValue]:
@@ -53,6 +54,8 @@ def team_metrics(team_id: str, side: str, win: Sequence[MatchEvent]) -> list[Met
         _count(MetricName.passes_completed, team_id, done),
         ratio,
         _count(MetricName.pressures, team_id, [e for e in mine if e.type == EventType.pressure]),
+        _count(MetricName.pressures_opp_half, team_id,
+               [e for e in mine if e.type == EventType.pressure and in_half_of_opponent(side, e.x)]),
         _count(MetricName.ball_wins, team_id, wins),
         _count(MetricName.high_ball_wins, team_id,
                [e for e in wins if in_half_of_opponent(side, e.x)]),
