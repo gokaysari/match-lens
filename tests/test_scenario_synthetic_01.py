@@ -191,3 +191,18 @@ def test_segment_and_initial_score():
     meta, events = load_scenario(SCENARIO_DIR)
     assert (meta.initial_score.home, meta.initial_score.away) == (0, 0)
     assert meta.segment_start_ms == 58 * 60_000 and meta.segment_end_ms == 62 * 60_000
+
+
+def test_every_possession_change_is_explained():
+    _, events = load_scenario(SCENARIO_DIR)
+    on_ball = [e for e in events if e.possession_id is not None]
+    changes = 0
+    for prev, cur in zip(on_ball, on_ball[1:]):
+        if prev.possession_id == cur.possession_id:
+            continue
+        changes += 1
+        lost = prev.outcome in ("incomplete", "lost", "blocked", "saved", "off_target", "goal") \
+            or prev.type == "clearance"
+        tackled = cur.type == "tackle" and cur.outcome == "won"
+        assert lost or tackled, (prev.event_id, cur.event_id)
+    assert changes >= 8

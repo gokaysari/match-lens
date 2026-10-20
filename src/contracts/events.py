@@ -119,6 +119,8 @@ class MatchEvent(BaseModel):
                 raise ValueError("substitution has no coordinates")
         elif self.x is None or self.y is None:
             raise ValueError(f"x and y are required for type '{t.value}'")
+        if (self.end_x is None) != (self.end_y is None):
+            raise ValueError("end_x and end_y must be both set or both None")
         if (self.end_x is not None or self.end_y is not None) and t not in END_COORD_TYPES:
             raise ValueError(f"end coordinates are not allowed for type '{t.value}'")
         if self.outcome is not None and self.outcome not in VALID_OUTCOMES.get(t, frozenset()):

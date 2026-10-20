@@ -174,3 +174,9 @@ def test_meta_segment_and_score():
         ScenarioMeta.model_validate(base_meta(initial_score={"home": "0", "away": 0}))
     with pytest.raises(ValidationError):
         ScenarioMeta.model_validate(base_meta(scenario_seed="1"))
+
+
+@pytest.mark.parametrize("kw", [{"end_x": None}, {"end_y": None}])
+def test_end_coords_both_or_neither(kw):
+    with pytest.raises(ValidationError):
+        MatchEvent.model_validate(base_event(**kw))

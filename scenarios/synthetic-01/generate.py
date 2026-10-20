@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "src"))
 
-from contracts.events import MatchEvent, ScenarioMeta  # noqa: E402
+from contracts.events import ON_BALL_TYPES, MatchEvent, ScenarioMeta  # noqa: E402
 
 SEED = 2026
 MATCH_ID = "synthetic-01"
@@ -60,10 +60,6 @@ def pid(team: str, n: int) -> str:
     return f"{team}-{n:02d}"
 
 
-ON_BALL = {"pass", "carry", "dribble", "shot", "kick_off", "clearance", "interception", "ball_recovery",
-           "tackle"}
-
-
 class Builder:
     def __init__(self, seed: int):
         self.rng = random.Random(seed)
@@ -89,7 +85,7 @@ class Builder:
         if end is not None:
             ex, ey = self._j(end[0], 105.0, fixed_end), self._j(end[1], 68.0)
         possession = None
-        if typ in ON_BALL:
+        if typ in ON_BALL_TYPES:
             if typ == "kick_off" or team != self.poss_team:
                 self.poss_n += 1
                 self.poss_team = team
@@ -138,10 +134,11 @@ def build(seed: int) -> tuple[ScenarioMeta, list[dict]]:
         b.add(1500, "nbr", holder, "pass", "incomplete", end=(tx + 4, ty - 3), recipient=target)
         sx, sy = b.cursor
         b.add(1100, "hba", h_player, h_kind, "won" if h_kind == "tackle" else None)
-        if n_kind == "interception":
-            b.add(1700, "hba", h_player, "pass", "incomplete", end=(sx - 3, sy + 5), recipient=h_to)
-        else:
-            b.add(1700, "hba", h_player, "pass", "complete", end=(sx - 3, sy + 5), recipient=h_to)
+        # Harbour's pass is only completed when Northbridge regain by tackling its recipient;
+        # a recovery or interception needs an incomplete pass to explain the turnover.
+        h_ok = n_kind == "tackle"
+        b.add(1700, "hba", h_player, "pass", "complete" if h_ok else "incomplete",
+              end=(sx - 3, sy + 5), recipient=h_to)
         b.add(1400, "nbr", n_player, n_kind, "won" if n_kind == "tackle" else None)
         holder = n_player
     for j in range(2):
