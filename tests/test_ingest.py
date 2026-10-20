@@ -14,6 +14,12 @@ def test_committed_scenario_loads():
     assert meta.match_id and events
 
 
+def test_empty_events_rejected(make_scenario):
+    with pytest.raises(IngestError) as ei:
+        load_scenario(make_scenario([]))
+    assert ei.value.code == "EMPTY_SCENARIO"
+
+
 def code_of(make_scenario, events, meta=None):
     with pytest.raises(IngestError) as ei:
         load_scenario(make_scenario(events, meta))

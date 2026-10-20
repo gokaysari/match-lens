@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -23,6 +24,7 @@ from domain.ingest import load_scenario  # noqa: E402
 from domain.metrics import WINDOW_S_DEFAULT, WINDOW_S_MAX, WINDOW_S_MIN, compute_window_metrics  # noqa: E402
 from domain.snapshot import build_snapshot, snapshot_id, visible_events  # noqa: E402
 
+log = logging.getLogger("matchlens.api")
 DEFAULT_SCENARIOS_DIR = Path(__file__).resolve().parents[2] / "scenarios"
 _STATUS = {"UNKNOWN_MATCH": 404, "UNKNOWN_SEQUENCE": 404, "UNKNOWN_EVENT": 404,
            "FUTURE_EVENT_FORBIDDEN": 404, "INVALID_QUERY": 422, "INVALID_WINDOW": 422}
@@ -53,6 +55,7 @@ def create_app(scenarios_dir: str | Path | None = None) -> FastAPI:
     @app.exception_handler(DomainError)
     async def _domain(_: Request, exc: DomainError):
         if exc.code not in _STATUS:
+            log.error("unexpected domain error code=%s message=%s", exc.code, exc.message)
             return _error(500, "INTERNAL", "unexpected domain error")
         return _error(_STATUS[exc.code], exc.code, exc.message)
 
