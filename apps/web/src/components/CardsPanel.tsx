@@ -1,4 +1,5 @@
 import type { Card, MatchEvent, MetricValue, ScenarioMeta } from "../api/types";
+import { playerName } from "./Pitch";
 import { formatMetric, humanize, mmss } from "../lib/format";
 
 interface Props {
@@ -45,7 +46,7 @@ export function CardsPanel({ cards, events, meta, watermarkSeq, clockMs }: Props
                 return (
                   <li key={id}>
                     {e
-                      ? `${id} · ${mmss(e.event_time_ms)} · ${teamName(e.team_id)} · ${e.type} · ${e.player_id ?? "–"}`
+                      ? `${id} · ${mmss(e.event_time_ms)} · ${teamName(e.team_id)} · ${e.type} · ${e.player_id ? playerName(meta, e.player_id) : "–"}`
                       : `${id} · not in loaded timeline`}
                   </li>
                 );

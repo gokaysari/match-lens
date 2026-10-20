@@ -19,7 +19,7 @@ export function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-export function snapshotAt(seq: number): Snapshot {
+export function snapshotAt(seq: number, score = API_SCORE): Snapshot {
   const last = events.find((e) => e.sequence === seq)!;
   return {
     schema_version: "1.0",
@@ -29,7 +29,7 @@ export function snapshotAt(seq: number): Snapshot {
     watermark_event_id: last.event_id,
     clock_ms: last.event_time_ms,
     period: last.period,
-    score: API_SCORE,
+    score,
     goal_event_ids: [],
     last_event: last,
     synthetic: true,
@@ -59,6 +59,8 @@ export function metricsAt(seq: number): WindowMetrics {
       metric("pass_completion", "hba", null, { unit: "ratio", numerator: 0, denominator: 0 }),
       metric("pressures", "nbr", 1),
       metric("pressures", "hba", 12),
+      metric("pressures_opp_half", "nbr", 6),
+      metric("pressures_opp_half", "hba", 7),
     ],
     synthetic: true,
   };
@@ -96,6 +98,8 @@ export interface MockOptions {
   override?: (endpoint: string, seq: number | null, call: Call) => Response | Promise<Response> | undefined;
   /** cards endpoint ignores at_seq filtering (to prove the UI filters too) */
   allCards?: boolean;
+  /** score the snapshot endpoint reports at a given watermark */
+  scoreFor?: (seq: number) => { home: number; away: number };
 }
 
 export function installMockApi(opts: MockOptions = {}) {
@@ -119,7 +123,7 @@ export function installMockApi(opts: MockOptions = {}) {
         };
         return jsonResponse(page);
       }
-      case "snapshot": return jsonResponse(snapshotAt(seq!));
+      case "snapshot": return jsonResponse(snapshotAt(seq!, opts.scoreFor?.(seq!)));
       case "metrics": return jsonResponse(metricsAt(seq!));
       case "cards": return jsonResponse(cardsAt(seq!, opts.allCards));
       default: return jsonResponse({ code: "NOT_FOUND", message: "x" }, 404);
