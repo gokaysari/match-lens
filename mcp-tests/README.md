@@ -1,4 +1,6 @@
-# MCP integration checks
+# MCP integration checks (exploration prototype)
+
+This directory is an early exploration from 2026-10-20, not the product's MCP layer: `football-server.mjs` is a 3-event JS fixture with its own field names and does not follow `src/contracts`. It only shows that the MCP client/server pattern, validation and failure handling work.
 
 Run from this directory with Node.js (tested v26.3.0) and npm (11.16.0):
 
@@ -19,7 +21,7 @@ Evidence:
 
 - `results.json` (local only, gitignored): discovered schemas and redacted/truncated sample responses from the latest remote run.
 - `football-results.tap`: eleven fixture test results.
-- `audit.json`: npm vulnerability database response for this installed test dependency tree.
+- `audit.json` (local only, gitignored): `npm audit --json` output for this installed test dependency tree.
 - `azure-tools.json` (local only, gitignored): Azure CLI tool catalog, not evidence of Azure account access.
 
 SportMonks/API-Football need provider tokens and licensed data; they were not installed or called. DBHub/AntV/Qdrant were not selected for this MVP and remain untested. No Azure resources, GitHub issues/PRs, or external messages are created by these checks.

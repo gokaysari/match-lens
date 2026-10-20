@@ -1,79 +1,76 @@
 # Yapılacaklar
 
-Tarihler İstanbul saatiyle. Kayıt sonu **20 Ekim 22:00**, teslim sonu **28 Ekim 09:59** (resmî kurallar §1).
+Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar §1). Sıra, 21 Ekim uçtan uca incelemesine göre önceliklendirildi; her adım bir öncekinin çıktısına dayanıyor.
 
-## Bugün (20 Ekim)
+## Tamamlananlar
 
-- [x] Hackathon kaydı tamamlandı.
-- [ ] Kategori kararı: Best Multi-Agent mi, başka kategori mi?
-- [ ] Takım: tek kişi mi, en fazla 4 kişi mi? Takvimdeki kesintiler buna göre.
-- [ ] Gerçek model erişimi: Foundry aboneliği, bölge, model kotası, `az login` (Azure CLI kurulu değil).
-- [ ] Önceki sohbetteki fikir varsa elle buraya aktar; raporlardaki ürün kapsamı bunun yerine kurulmuş bir varsayım.
-- [x] `git init` (yerel, `main`).
-- [ ] Public GitHub deposu (yeni proje şartı, secret yok).
-- [x] Tek sentetik senaryo + olay şeması: `src/contracts/events.py`, `src/domain/ingest.py`, `scenarios/synthetic-01` (97 olay, 4 an, 107 test; 2 düzeltme turu sonrası reviewer Spec ✅ Kalite ✅).
+- [x] Kayıt; `git init`; klasör yapısı; MIT lisansı; tek kural dosyası (`AGENTS.md`); geliştirme agent ekibi.
+- [x] Olay sözleşmesi, doğrulayan yükleyici, seed'li sentetik senaryo `synthetic-01` (97 olay, 4 an).
+- [x] Deterministik snapshot/skor, `metrics-v1` pencere metrikleri, şablon kartlar (gol, baskı), salt-okunur replay API.
+- [x] Web replay (saha, kontroller, skor, kartlar + kanıt, metrikler) ve Playwright e2e (9 akış, gerçek API).
+- [x] Agent sözleşmesi + üç rol + deterministik koordinatör + kod denetimleri + sahte model + tek-agent baseline yolu.
+- [x] Public'i bozacak dosyalar depodan çıkarıldı (yerelde duruyor).
 
-## 21 Ekim — uçtan uca ince dilim
+## 1. Sayılar için yer tutucu tasarımı + önemli düzeltmeler (21 Ekim, devam ediyor — dal `wip/facts-v2`)
 
-- [x] Klasör yapısı: `apps/web`, `services/api`, `src/{workflow,agents,domain,contracts}`, `scenarios`, `evals`, `docs`, `infra`.
-- [x] Deterministik snapshot/skor, pencereli metrikler (`metrics-v1`), şablon kartlar (gol, baskı), salt-okunur replay API (175 test).
-- [x] Web replay: saha, kontroller, skor, kartlar + kanıt, metrik tablosu (48 test) ve Playwright e2e (9 akış, gerçek API).
-- [ ] Football MCP fixture'daki dört fonksiyonu gerçek veri katmanına taşı (önce doğrudan fonksiyon, MCP adaptörü sonra). Mevcut 11 test sözleşme testi olarak korunur.
+- [x] Sözleşme v2: model metninde rakam yok, sayılar `{fact}` yer tutucusu; `Fact` tablosu; `PublishedClaim`; `InsightOutcome`; `/meta` → `MatchInfo` (maç sonucunu sızdırmıyor).
+- [ ] Agent pipeline'ı: fact tablosu (pencere, önceki pencere, skor, saat, top sahipliği), yeni denetimler, render, istemler p3, düzeltme girdisinde önceki çıktı, kod bloğu toleransı, adil baseline, tek fixture kopyası.
+- [ ] Domain/API: eksik sonuç/oyuncu, devre-saat, seed, top sahipliği tutarlılığı, çift `match_id`, UTF-8 hataları; kilit dosyaları runtime/dev ayrımı; README doğruluğu ve taşınabilir kurulum.
+- [ ] Web: `MatchInfo`; gecikmede canlılık (tek uçuşta istek); doğru metrik başlığı; "as of" eskilik işareti; gol/kart duyuruları; saha kontrastı; snapshot dışı kanıt işareti; okunur metin ve etiketler; 390 px skor çubuğu.
+- [ ] Üç dalın birleştirilmesi, tam test + e2e, `reviewer` ile yeniden inceleme, `main`'e birleştirme.
 
-## 22 Ekim — agentlar
+## 2. Foundry model istemcisi (22 Ekim)
 
-- [x] Agent sözleşmesi (`src/contracts/agents.py`) ve üç rol + deterministik koordinatör + kod denetimleri + sahte model (`src/agents`, `src/workflow`; 261 test).
-- [x] Tek-agent baseline yolu (`workflow/single_agent.py`), aynı denetimler.
-- [ ] Foundry `ModelClient` (azure-ai-projects 2.x, DefaultAzureCredential, env `FOUNDRY_PROJECT_ENDPOINT` / `FOUNDRY_MODEL_DEPLOYMENT`); katı structured output için şema uyarlaması; ret/content-filter ele alma.
-- [ ] Microsoft Agent Framework: koordinatörü MAF workflow olarak sarmak (hero teknoloji).
-- [ ] Insight'ları API'ye ve UI'a bağlamak (persona seçimi).
+- [ ] Foundry projesi ve model dağıtımı (kullanıcı: `az login`, proje endpoint'i ve dağıtım adı).
+- [ ] `FoundryModelClient` (`azure-ai-projects` 2.x, `DefaultAzureCredential`, env `FOUNDRY_PROJECT_ENDPOINT` / `FOUNDRY_MODEL_DEPLOYMENT`); sürümleri Microsoft Learn'den doğrula ve sabitle.
+- [ ] Katı structured output: şemaları "tüm alanlar zorunlu" kuralına uyarlama (Learn'de doğrula); ret/content-filter → istisna; zaman aşımları gerçek gecikmeye göre ayar.
+- [ ] Gerçek modelle iki anın uçtan uca denemesi; maliyet ve gecikmeyi ölç (çağrı sayısı, token).
 
-## 23 Ekim — UX ve hata toparlama
+## 3. İçgörüleri ürüne taşımak (22–23 Ekim)
 
-- [ ] İki persona (analist / casual), gerçekten farklı içerik.
-- [ ] Kanıt çekmecesi (kart → olaylar → pencere).
-- [ ] Tek düzeltme hakkı, expiry kontrolü, timeout'ta kanıtlı şablon; skor/replay kesilmez.
-- [ ] Storyteller sonrası deterministik sayı/ID/güncellik kontrolü.
+- [ ] Sözleşme: `/insights?at_seq=N` (aynı watermark ve tazelik kuralları), `InsightList`; Insight ↔ kart bağı (`card_id`).
+- [ ] Backend: içgörüleri önceden üret ve önbelleğe al (replay deterministik); izleme kaydını sakla.
+- [ ] Web: Insight TS tipleri; analist / sıradan taraftar seçimi; sonuç rozeti (yayınlandı / yedek / çekimser); analist görünümünde iddialar, olgular ve kanıt; kanıtın sahada vurgulanması; önemli anlara atlama düğmeleri ve zaman çizelgesinde işaretler.
+- [ ] Tutulan kulüp seçimi (kurallar kişiselleştirme örneği olarak sayıyor); zaman kalırsa ikinci dil.
+- [ ] e2e: persona geçişi (metin değişir, sayılar aynı kalır), her sonuç rozeti.
+- [ ] Tipler ve sahte API yükleri JSON şemalarına karşı test edilsin (elle yazılan TS tipleri sapmasın).
 
-## 24 Ekim — değerlendirme
+## 4. Dağıtım ve CI (24 Ekim)
+
+- [ ] Tek container: FastAPI derlenmiş SPA'yı aynı origin'den sunar; Dockerfile.
+- [ ] Azure Container Apps + managed identity ile Foundry erişimi; jüri için ücretsiz, kısıtsız erişim (kurallar §4.8).
+- [ ] GitHub Actions: pytest, vitest, tsc, şema tazeliği, build; mümkünse e2e.
+
+## 5. Microsoft Agent Framework (24–25 Ekim, zaman kutulu)
+
+- [ ] Koordinatörü MAF workflow olarak sar (kategori metni "supported orchestration approach" diyor); deterministik denetimler aynen kalsın; API'yi Learn'den doğrula.
+- [ ] İsteğe bağlı: domain fonksiyonları üzerinde dört salt-okunur aracı sunan Python MCP adaptörü; `mcp-tests/` JS prototipinin yerini alır.
+
+## 6. Ölçümlü değerlendirme (25 Ekim)
 
 - [ ] 20–30 sabit pencere: normal, kırılma, eksik/tekrarlı/geç olay, yanıltıcı trend, kanıt uyuşmazlığı, timeout.
-- [ ] Ölç: desteklenmeyen iddia oranı, kanıt bağlantı doğruluğu, p50/p95 gecikme, çıktı başına maliyet, toparlama başarısı.
-- [ ] Multi-agent vs tek-agent sonucu ne çıkarsa dürüstçe raporla.
+- [ ] Ölç: desteklenmeyen iddia oranı, yedeğe düşme oranı, kanıt bağlantı doğruluğu, p50/p95 gecikme, an başına maliyet.
+- [ ] Çok-agent vs tek-agent aynı model, girdi, bütçe ve düzeltme hakkıyla; sonuç ne çıkarsa dürüstçe raporla.
 
-## 25 Ekim — dağıtım
+## 7. Teslim (26–27 Ekim)
 
-- [ ] Dağıtım (ör. Container Apps); temiz tarayıcıdan jüri erişimi; ücretsiz, kısıtsız erişim süresi.
-- [ ] Playwright MCP ile persona geçişi ve kanıt çekmecesi uçtan uca testi.
-- [ ] README (İngilizce): kurulum, seed ile tekrar üretim, verinin sentetik olduğu.
+- [ ] Geçmiş temizliği: `git filter-repo` ile kaldırılan yollar ve e-posta (GitHub noreply); yalnız `main` push; worktree dallarını silme.
+- [ ] İngilizce: README (pitch, kurulum, test erişimi), `docs/` (mimari, değerlendirme sonuçları, sınırlamalar); bu dosya ya çevrilir ya da depodan çıkarılır.
+- [ ] < 2 dakikalık video (problem → replay + persona → kanıt zinciri → hata toparlama → ölçüm ve Microsoft stack).
+- [ ] Ölçülmemiş iddia yok ("real time", "hallucination-free" vb.); resmî Microsoft/Premier League ürünü izlenimi yok; sayı denetiminin sınırı belgelenir.
+- [ ] Son kontrol ve 27 Ekim'de erken teslim.
 
-## 26 Ekim — teslim materyalleri
+## Backlog (engelleyici değil)
 
-- [ ] < 2 dakikalık video (hedef 110 sn: problem 10 / replay+persona 55 / kanıt zinciri 15 / hata toparlama 15 / ölçüm+stack 15).
-- [ ] Tüm materyaller İngilizce; Türkçe raporlardan gerekenleri çevir.
-- [ ] Ölçülmeyen iddiaları kullanma ("real time", "hallucination-free", "enterprise-ready"…); resmî Microsoft/PL ürünü izlenimi verme.
+- Baskı kartı eşiğe tam eşit tetikleniyor (6/10 = 0,6); seed değişirse kart kaybolabilir — senaryo eşikten uzaklaştırılmalı veya birkaç seed için test edilmeli.
+- Analist için ek deterministik metrikler: tehdit göstergesi (son üçte bir / ceza sahası girişi, şut mesafesi), oyuncu bazlı kırılımlar, pas mesafesi/hızı (kurallar §4.1 öneriyor).
+- `high_ball_wins` tanımı "rakip yarı saha" — futboldaki "high" anlamından geniş; adı veya tanımı netleştir.
+- Sayı metrikleri JSON'da float (`16.0`); `EventPage`/`WindowMetrics` `watermark_seq` taşımıyor.
+- Senaryo gerçekçiliği: baskı turundaki "tackle won"un önünde top taşıyan yok; pas ritmi tekdüze.
+- Backend testleri ~9 sn (kartlar her sequence için API'den); gerekirse örnekle. Starlette `httpx2` uyarısı.
+- Web: hız değişince kalan bekleme baştan başlıyor; oynatma zamanlaması için entegrasyon testi yok; e2e'de otomatik erişilebilirlik (axe) taraması yok.
+- Paket adları (`agents`, `contracts`, `domain`, `workflow`) genel; SDK eklerken çakışmaya dikkat (ör. openai-agents).
 
-## 27 Ekim — erken teslim
+## Kapsam dışı
 
-- [ ] Son kontrol: public repo + video linki, secret taraması, seed tekrar üretimi, jüri erişimi.
-- [ ] Teslim; 28 Ekim 09:59 sınırına tampon bırak.
-
-## Backlog (inceleme notları, engelleyici değil)
-
-- Baskı kartı eşiğe tam eşit tetikleniyor (6/10 = 0,6); senaryo yeniden üretilirse 2060–2062'ye kayabilir.
-- Backend testleri 0,5 sn → 9 sn (kartlar her sequence için API'den çağrılıyor); gerekirse örnekle.
-- `fixes2.test.tsx` "past the watermark" testi ara durumu da doğrulamalı (t≈160 ms'de snapshot null).
-- Boş `p[role=status]` skor çubuğunda sıfır boyutlu öğe olarak gap'e katılıyor.
-- `useAnalysis`: bekleyen trailing timer varken `matchId` değişirse eski closure çalışır (bugün erişilemez).
-- Starlette TestClient `httpx2` uyarısı.
-- Sayı denetimi sayının kaynağını doğruluyor, anlamını değil ("60 pressures" ← "60 s" penceresi geçer); anlam kontrolü Evidence Editor'da. Gerekirse sayı→metrik bağlama (claim içinde `{metric}` yer tutucuları).
-- Bilinen yanlış retler (nadir): "final third", "a one-two", "sixteen", "4-4-2", alıntılanmayan olay saatleri.
-
-## Kapsam dışı (zaman kalırsa)
-
-İkinci dil, oyuncu lensi, gelişmiş animasyon, gerçek veri sağlayıcısı (SportMonks/API-Football: lisans ve anahtar gerekir), DBHub/Qdrant/AntV, A2A.
-
-## Depo hijyeni
-
-- [x] `reports/`, `research_notes/` (özel link + kuralların kopyası) ve uzak MCP ham çıktıları depodan çıkarıldı, yerelde duruyor.
-- [ ] Public'e açmadan önce geçmişi temizle: eski commit'lerde bu dosyalar ve kişisel e-posta var → tek temiz commit'le, GitHub noreply e-postasıyla yayınla.
+Gerçek veri sağlayıcısı (lisans/anahtar gerekir), otomatik video etiketleme, DBHub/Qdrant/AntV, A2A, tam maç motoru.

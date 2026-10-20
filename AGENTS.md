@@ -28,7 +28,7 @@ The main session is the lead developer: it plans, splits work into small tasks w
 
 | Agent | Owns |
 |---|---|
-| `backend-engineer` | `services/api`, `src/domain`, `src/contracts`, `scenarios`, the football tools (incl. `mcp-tests/`) |
+| `backend-engineer` | `services/api`, `src/domain`, `src/agents`, `src/workflow`, `scenarios`, `evals`, `mcp-tests/` (contracts in `src/contracts` are lead-owned) |
 | `frontend-engineer` | `apps/web` |
 | `e2e-tester` | browser tests for user flows |
 | `reviewer` | read-only review of a finished task's diff |
