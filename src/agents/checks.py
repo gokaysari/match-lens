@@ -74,9 +74,10 @@ def number_words_in(text: str, allowed: frozenset[str] = frozenset()) -> list[st
 
 
 def card_words(candidate: MomentCandidate) -> frozenset[str]:
-    """Number words the deterministic source card itself uses are allowed in agent text."""
+    """Number words the deterministic source card itself uses AS numbers are allowed in
+    agent text. Words the card uses otherwise (e.g. a pitch "half") grant nothing."""
     card = candidate.source_card
-    return frozenset(w.lower() for w in re.findall(r"[A-Za-z0-9]+", card.title + " " + card.body))
+    return frozenset(number_words_in(card.title + " " + card.body))
 
 
 def trigger_clock(candidate: MomentCandidate) -> tuple[int, int]:
