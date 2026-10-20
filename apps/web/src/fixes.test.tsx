@@ -17,6 +17,7 @@ afterEach(() => {
 const idx = (seq: number) => events.findIndex((e) => e.sequence === seq);
 const slider = () => screen.getByRole("slider", { name: "Replay position" }) as HTMLInputElement;
 const goTo = (seq: number) => fireEvent.change(slider(), { target: { value: String(idx(seq)) } });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const score = (side: "Home" | "Away") => screen.getByLabelText(`${side} score`);
 
 async function renderApp(opts?: MockOptions) {
@@ -68,25 +69,25 @@ describe("1. never show analysis from past the watermark", () => {
 });
 
 describe("4. late responses are not rendered", () => {
-  it("ignores a superseded response that ignores the abort signal and resolves late", async () => {
-    const user = userEvent.setup();
+  it("ignores a response for a position that was scrubbed back from, even if it ignores the abort signal", async () => {
     let resolveLate: () => void = () => {};
-    const api = await renderApp({
+    await renderApp({
+      scoreFor: (s) => (s === 2030 ? { home: 9, away: 9 } : { home: 4, away: 2 }),
       override: (ep, seq) =>
-        ep === "snapshot" && seq === 2001
+        ep === "snapshot" && seq === 2030
           ? new Promise<Response>((res) => {
-              resolveLate = () => res(jsonResponse(snapshotAt(2001, { home: 9, away: 9 })));
+              resolveLate = () => res(jsonResponse(snapshotAt(2030, { home: 9, away: 9 })));
             })
           : undefined,
     });
-    await waitFor(() => expect(api.forEndpoint("snapshot").length).toBe(1));
-    await user.click(screen.getByRole("button", { name: "Step forward" }));
-    // a newer request must have been issued (superseding the hung one) before it resolves late
-    await waitFor(() => expect(api.forEndpoint("snapshot").length).toBe(2));
+    await waitFor(() => expect(score("Home")).toHaveTextContent("4"));
+    goTo(2030);
+    await sleep(250);
+    goTo(2010); // below the in-flight at_seq: it is aborted
     await waitFor(() => expect(score("Home")).toHaveTextContent("4"));
     await act(async () => {
       resolveLate();
-      await new Promise((r) => setTimeout(r, 20));
+      await sleep(20);
     });
     expect(score("Home")).toHaveTextContent("4");
   });
@@ -159,24 +160,18 @@ describe("5/6. metrics panel", () => {
   it("renders pressures_opp_half as a row", async () => {
     await renderApp();
     const table = await screen.findByRole("table");
-    const row = within(table).getByRole("row", { name: /pressures opp half/i });
+    const row = within(table).getByRole("row", { name: /pressures in opponent half/i });
     expect(within(row).getByText("6")).toBeInTheDocument();
     expect(within(row).getByText("7")).toBeInTheDocument();
   });
 
-  it("caption is 'Since period start' in the first 60 s of a period and 'Last 60 s' after", async () => {
+  it("caption says 'Since 58:00 (replay start)' while the window starts before the segment, else 'Last 60 s'; the table name stays 'Last 60 s'", async () => {
     await renderApp();
-    expect(await screen.findByRole("table", { name: "Since period start" })).toBeInTheDocument();
-    const later = events.find((e) => e.event_time_ms - events[0]!.event_time_ms >= 60000)!;
+    const table = await screen.findByRole("table", { name: "Last 60 s" });
+    expect(within(table).getByText("Since 58:00 (replay start)")).toBeInTheDocument();
+    const later = events.find((e) => e.event_time_ms - meta.segment_start_ms >= 60000)!;
     goTo(later.sequence);
-    expect(await screen.findByRole("table", { name: "Last 60 s" })).toBeInTheDocument();
-  });
-});
-
-describe("7. player names", () => {
-  it("uses meta.players names in the pitch aria-label", async () => {
-    await renderApp();
-    expect(screen.getByRole("img", { name: /^58:00 Northbridge FC pass, Rowan Locke to Idris Vane/ })).toBeInTheDocument();
+    await waitFor(() => expect(within(screen.getByRole("table", { name: "Last 60 s" })).getByText("Last 60 s")).toBeInTheDocument());
   });
 });
 

@@ -31,17 +31,14 @@ export interface MatchEvent {
 
 export interface Team { id: string; name: string; side: "home" | "away" }
 export interface Player { id: string; team_id: string; name: string; shirt_number: number }
-export interface KeyMoment { key: string; description: string; first_event_id: string; last_event_id: string }
 export interface Score { home: number; away: number }
 
-export interface ScenarioMeta {
+/** GET /meta: what a client may know before the replay starts (contract MatchInfo). */
+export interface MatchInfo {
   schema_version: "1.0";
   match_id: string;
-  scenario_seed: number;
-  title: string;
   teams: Team[];
   players: Player[];
-  moments: KeyMoment[];
   initial_score: Score;
   segment_start_ms: number;
   segment_end_ms: number;

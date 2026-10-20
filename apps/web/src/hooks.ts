@@ -36,17 +36,23 @@ export function useReplay(events: MatchEvent[]) {
 export type AnalysisStatus = "loading" | "ready" | "unavailable";
 
 export const THROTTLE_MS = 200;
+/** A request that has not answered by then is abandoned so later positions can still be fetched. */
+export const REQUEST_TIMEOUT_MS = 5000;
 
 /** Seq encoded in a snapshot_id "<match>@<seq>"; NaN when malformed. */
 export function seqOfSnapshotId(id: string): number {
   return Number(id.split("@").pop());
 }
 
+interface InFlight { id: number; at: number; ctl: AbortController; timedOut: boolean }
+
 /**
- * Fetches snapshot, metrics and cards for the watermark. Leading + trailing throttle
- * (THROTTLE_MS) so fast playback still gets periodic updates. Only issuing a new request aborts
- * the previous one; a response is applied if it belongs to the most recently issued request, its
- * snapshot_id matches its own at_seq, and at_seq is not past the current watermark.
+ * Fetches snapshot, metrics and cards for the watermark with at most one request in flight.
+ * When it completes it is applied if its at_seq is not past the current watermark and its
+ * snapshot_ids match; then, if the watermark moved meanwhile, one request for the latest watermark
+ * is issued (never closer than THROTTLE_MS after the previous one). The in-flight request is
+ * aborted only when the watermark moves BELOW its at_seq (scrub back) or after REQUEST_TIMEOUT_MS,
+ * so under high latency responses keep being applied during playback instead of being starved.
  * `settled` is the last applied outcome (never the transient loading state).
  */
 export function useAnalysis(matchId: string, seq: number) {
@@ -59,62 +65,87 @@ export function useAnalysis(matchId: string, seq: number) {
   const wasUnavailable = useRef(false);
 
   const latest = useRef(seq);
-  const issuedId = useRef(0);
-  const lastIssued = useRef(-Infinity);
+  const nextId = useRef(0);
+  const inflight = useRef<InFlight | null>(null);
+  const lastAt = useRef<number | null>(null); // at_seq of the most recently issued request
+  const lastIssuedTime = useRef(-Infinity);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ctl = useRef<AbortController | null>(null);
 
-  const issue = useCallback(() => {
-    timer.current = null;
-    lastIssued.current = Date.now();
-    ctl.current?.abort();
-    const c = new AbortController();
-    ctl.current = c;
-    const id = ++issuedId.current;
+  const pump = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    const cur = inflight.current;
+    if (cur) {
+      if (latest.current >= cur.at) return; // still useful: its completion will chain
+      cur.ctl.abort(); // scrubbed back below it
+      inflight.current = null;
+    }
+    if (lastAt.current === latest.current) return; // already requested for this watermark
+    const wait = lastIssuedTime.current + THROTTLE_MS - Date.now();
+    if (wait > 0) {
+      timer.current = setTimeout(pump, wait);
+      return;
+    }
+    const ctl = new AbortController();
     const at = latest.current;
+    const req: InFlight = { id: ++nextId.current, at, ctl, timedOut: false };
+    inflight.current = req;
+    lastAt.current = at;
+    lastIssuedTime.current = Date.now();
+    const to = setTimeout(() => {
+      req.timedOut = true;
+      ctl.abort();
+    }, REQUEST_TIMEOUT_MS);
     const expected = `${matchId}@${at}`;
     const valid = <T extends { snapshot_id: string }>(r: PromiseSettledResult<T>): T | null =>
       r.status === "fulfilled" && r.value.snapshot_id === expected ? r.value : null;
     void Promise.allSettled([
-      getSnapshot(matchId, at, c.signal),
-      getMetrics(matchId, at, WINDOW_S, c.signal),
-      getCards(matchId, at, c.signal),
+      getSnapshot(matchId, at, ctl.signal),
+      getMetrics(matchId, at, WINDOW_S, ctl.signal),
+      getCards(matchId, at, ctl.signal),
     ]).then(([s, m, k]) => {
-      // An aborted request (superseded, or StrictMode/unmount cleanup) is not an outage.
-      if (c.signal.aborted || id !== issuedId.current || at > latest.current) return;
-      const sv = valid(s), mv = valid(m), kv = valid(k);
-      if (sv) setSnapshot(sv);
-      if (mv) setMetrics(mv);
-      if (kv) setCards(kv.cards);
-      const ok = !!(sv && mv && kv);
-      if (!ok) {
-        wasUnavailable.current = true;
-        setRecovered(false);
-      } else if (wasUnavailable.current) {
-        wasUnavailable.current = false;
-        setRecovered(true);
-      } else {
-        setRecovered(false);
+      clearTimeout(to);
+      // Superseded, scrubbed away or unmounted (also StrictMode cleanup): not an outage.
+      if (inflight.current !== req || (ctl.signal.aborted && !req.timedOut)) return;
+      inflight.current = null;
+      if (at <= latest.current) {
+        const sv = valid(s), mv = valid(m), kv = valid(k);
+        if (sv) setSnapshot(sv);
+        if (mv) setMetrics(mv);
+        if (kv) setCards(kv.cards);
+        const ok = !!(sv && mv && kv);
+        if (!ok) {
+          wasUnavailable.current = true;
+          setRecovered(false);
+        } else if (wasUnavailable.current) {
+          wasUnavailable.current = false;
+          setRecovered(true);
+        } else {
+          setRecovered(false);
+        }
+        setSettled(ok ? "ready" : "unavailable");
+        setStatus(at === latest.current ? (ok ? "ready" : "unavailable") : "loading");
       }
-      setSettled(ok ? "ready" : "unavailable");
-      setStatus(at === latest.current ? (ok ? "ready" : "unavailable") : "loading");
+      pump();
     });
   }, [matchId]);
 
   useEffect(() => {
     latest.current = seq;
     setStatus("loading");
-    if (timer.current) return; // a trailing call is already scheduled and will read latest
-    const wait = lastIssued.current + THROTTLE_MS - Date.now();
-    if (wait <= 0) issue();
-    else timer.current = setTimeout(issue, wait);
-  }, [matchId, seq, issue]);
+    pump();
+  }, [matchId, seq, pump]);
 
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = null;
-      ctl.current?.abort();
+      inflight.current?.ctl.abort();
+      inflight.current = null;
+      lastAt.current = null;
+      lastIssuedTime.current = -Infinity;
     },
     [],
   );

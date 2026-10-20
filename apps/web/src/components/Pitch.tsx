@@ -1,16 +1,19 @@
 import { useRef } from "react";
-import type { MatchEvent, ScenarioMeta } from "../api/types";
+import type { MatchEvent, MatchInfo } from "../api/types";
 import { mmss } from "../lib/format";
 
 export const TEAM_COLORS = { home: "#1d4ed8", away: "#c2410c" } as const;
+export const GRASS_COLOR = "#2e7d32";
+/** Under every trail mark: >= 3:1 against the grass, and both team colours are >= 3:1 against it. */
+export const CASING_COLOR = "#ffffff";
 const TRAIL = 6;
 const ARROW_TYPES = new Set(["pass", "carry", "shot"]);
 
-export function playerName(meta: ScenarioMeta, id: string): string {
+export function playerName(meta: MatchInfo, id: string): string {
   return meta.players.find((p) => p.id === id)?.name ?? id;
 }
 
-export function describeEvent(e: MatchEvent, meta: ScenarioMeta): string {
+export function describeEvent(e: MatchEvent, meta: MatchInfo): string {
   const team = meta.teams.find((t) => t.id === e.team_id)?.name ?? e.team_id;
   const who = e.player_id ? `, ${playerName(meta, e.player_id)}` : "";
   const to = e.recipient_player_id ? ` to ${playerName(meta, e.recipient_player_id)}` : "";
@@ -34,7 +37,7 @@ function PitchMarkings() {
   );
 }
 
-export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: number; meta: ScenarioMeta }) {
+export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: number; meta: MatchInfo }) {
   const warned = useRef(new Set<string>());
   const sideOf = (teamId: string) => meta.teams.find((t) => t.id === teamId)?.side;
   const upTo = events.slice(0, index + 1);
@@ -62,11 +65,11 @@ export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: nu
           {(["home", "away"] as const).map((s) => (
             <marker key={s} id={`arrow-${s}`} viewBox="0 0 6 6" refX="5" refY="3"
               markerWidth="3.5" markerHeight="3.5" orient="auto-start-reverse">
-              <path d="M0,0 L6,3 L0,6 z" fill={TEAM_COLORS[s]} />
+              <path d="M0,0 L6,3 L0,6 z" fill={TEAM_COLORS[s]} stroke={CASING_COLOR} strokeWidth="1.2" paintOrder="stroke" strokeLinejoin="round" />
             </marker>
           ))}
         </defs>
-        <rect x="0" y="0" width="105" height="68" fill="#2e7d32" />
+        <rect x="0" y="0" width="105" height="68" fill={GRASS_COLOR} />
         {/* contract frame: origin bottom-left, so flip y */}
         <g transform="translate(0,68) scale(1,-1)">
           <PitchMarkings />
@@ -77,19 +80,38 @@ export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: nu
             const opacity = isLatest ? 1 : 0.35 + (0.4 * (i + 1)) / drawable.length;
             const x = e.x as number;
             const y = e.y as number;
+            const away = side === "away";
+            const r = isLatest ? 1.4 : 0.9;
+            const casing = { stroke: CASING_COLOR, "data-casing": "true" } as const;
             return (
               <g key={e.event_id} data-event-id={e.event_id} data-latest={isLatest ? "true" : "false"} opacity={opacity}>
                 {e.type === "pressure" ? (
-                  <circle cx={x} cy={y} r={isLatest ? 2.2 : 1.6} fill="none" stroke={color}
-                    strokeWidth={isLatest ? 0.7 : 0.45} strokeDasharray="0.8 0.5" />
+                  <>
+                    <circle cx={x} cy={y} r={isLatest ? 2.2 : 1.6} fill="none" {...casing}
+                      strokeWidth={isLatest ? 1.5 : 1.15} />
+                    <circle cx={x} cy={y} r={isLatest ? 2.2 : 1.6} fill="none" stroke={color}
+                      strokeWidth={isLatest ? 0.7 : 0.45}
+                      strokeDasharray={away ? "0.8 0.5" : undefined} />
+                  </>
                 ) : (
                   <>
                     {ARROW_TYPES.has(e.type) && e.end_x !== null && e.end_y !== null && (
-                      <line x1={x} y1={y} x2={e.end_x} y2={e.end_y} stroke={color}
-                        strokeWidth={isLatest ? 0.7 : 0.4} markerEnd={`url(#arrow-${side})`} />
+                      <>
+                        <line x1={x} y1={y} x2={e.end_x} y2={e.end_y} {...casing}
+                          strokeWidth={isLatest ? 1.5 : 1.1} />
+                        <line x1={x} y1={y} x2={e.end_x} y2={e.end_y} stroke={color}
+                          strokeWidth={isLatest ? 0.7 : 0.4}
+                          strokeDasharray={away ? "1.2 0.7" : undefined}
+                          markerEnd={`url(#arrow-${side})`} />
+                      </>
                     )}
-                    <circle cx={x} cy={y} r={isLatest ? 1.4 : 0.9} fill={color} stroke="#ffffff"
-                      strokeWidth={isLatest ? 0.4 : 0.2} />
+                    {away ? (
+                      <rect data-shape="square" x={x - r} y={y - r} width={2 * r} height={2 * r} fill={color}
+                        stroke={CASING_COLOR} strokeWidth={isLatest ? 0.4 : 0.2} />
+                    ) : (
+                      <circle cx={x} cy={y} r={r} fill={color} stroke={CASING_COLOR}
+                        strokeWidth={isLatest ? 0.4 : 0.2} />
+                    )}
                   </>
                 )}
               </g>
@@ -101,11 +123,11 @@ export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: nu
         <ul>
           {meta.teams.map((t) => (
             <li key={t.id}>
-              <span className="swatch" style={{ background: TEAM_COLORS[t.side] }} aria-hidden="true" />
+              <span className={`swatch ${t.side}`} style={{ background: TEAM_COLORS[t.side] }} aria-hidden="true" />
               {t.name} ({t.side}) attacks {t.side === "home" ? "→ right" : "← left"}
             </li>
           ))}
-          <li>Dot = on-ball event, arrow = pass/carry/shot, ring = pressure</li>
+          <li>Home: round dots, solid lines. Away: square dots, dashed lines. Arrow = pass/carry/shot, ring = pressure</li>
         </ul>
       </figcaption>
     </figure>

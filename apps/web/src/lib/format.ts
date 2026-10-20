@@ -24,6 +24,23 @@ export function humanize(name: string): string {
   return name.replace(/_/g, " ");
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  passes_attempted: "Passes attempted",
+  passes_completed: "Passes completed",
+  pass_completion: "Pass completion",
+  pressures: "Pressures",
+  pressures_opp_half: "Pressures in opponent half",
+  ball_wins: "Ball wins",
+  high_ball_wins: "Ball wins in opponent half",
+  shots: "Shots",
+  goals: "Goals",
+};
+
+/** Plain-language label for a metric name; unknown names fall back to the humanized id. */
+export function metricLabel(name: string): string {
+  return METRIC_LABELS[name] ?? humanize(name);
+}
+
 /** Real-time delay before advancing to the next event; a single gap is capped at 5 s. */
 export const MAX_GAP_REAL_MS = 5000;
 export function playbackDelay(gapMs: number, speed: number): number {
