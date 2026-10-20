@@ -80,7 +80,8 @@ export function useAnalysis(matchId: string, seq: number) {
       getMetrics(matchId, at, WINDOW_S, c.signal),
       getCards(matchId, at, c.signal),
     ]).then(([s, m, k]) => {
-      if (id !== issuedId.current || at > latest.current) return;
+      // An aborted request (superseded, or StrictMode/unmount cleanup) is not an outage.
+      if (c.signal.aborted || id !== issuedId.current || at > latest.current) return;
       const sv = valid(s), mv = valid(m), kv = valid(k);
       if (sv) setSnapshot(sv);
       if (mv) setMetrics(mv);

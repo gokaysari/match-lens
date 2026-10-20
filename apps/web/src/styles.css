@@ -23,6 +23,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); }
 .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
 .analysis-status { flex-basis: 100%; text-align: center; margin: 0; font-size: 0.85rem; color: var(--muted); }
 .analysis-status:empty { display: none; }
+/* "Updating…" toggles on every step: keep it out of the flow so the page never shifts. */
+.scorebar { position: relative; }
+span.analysis-status { position: absolute; top: 6px; right: 12px; flex-basis: auto; width: auto; }
 p.analysis-status:empty { display: block; flex-basis: 0; width: 0; height: 0; overflow: hidden; }
 .analysis-status[data-state="unavailable"] { color: #991b1b; font-weight: 600; }
 .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; margin-top: 12px; }
