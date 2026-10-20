@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "Claim": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "minLength": 1,
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "evidence_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Event Ids",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ClaimKind"
+        },
+        "metric_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MetricValue"
+          },
+          "title": "Metric Refs",
+          "type": "array"
+        },
+        "text": {
+          "maxLength": 280,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "kind",
+        "text",
+        "evidence_event_ids"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "ClaimKind": {
+      "enum": [
+        "observation",
+        "interpretation"
+      ],
+      "title": "ClaimKind",
+      "type": "string"
+    },
+    "MetricName": {
+      "enum": [
+        "passes_attempted",
+        "passes_completed",
+        "pass_completion",
+        "pressures",
+        "pressures_opp_half",
+        "ball_wins",
+        "high_ball_wins",
+        "shots",
+        "goals"
+      ],
+      "title": "MetricName",
+      "type": "string"
+    },
+    "MetricValue": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_version": {
+          "const": "metrics-v1",
+          "default": "metrics-v1",
+          "title": "Definition Version",
+          "type": "string"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denominator"
+        },
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "name": {
+          "$ref": "#/$defs/MetricName"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerator"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "count",
+            "ratio"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "team_id",
+        "value",
+        "unit",
+        "event_ids"
+      ],
+      "title": "MetricValue",
+      "type": "object"
+    },
+    "Outcome": {
+      "enum": [
+        "published",
+        "fallback",
+        "abstained"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "Persona": {
+      "enum": [
+        "analyst",
+        "casual"
+      ],
+      "title": "Persona",
+      "type": "string"
+    },
+    "PersonaText": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 320,
+          "minLength": 1,
+          "title": "Body",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "language": {
+          "const": "en",
+          "default": "en",
+          "title": "Language",
+          "type": "string"
+        },
+        "persona": {
+          "$ref": "#/$defs/Persona"
+        },
+        "title": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "persona",
+        "title",
+        "body",
+        "claim_ids"
+      ],
+      "title": "PersonaText",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What the UI renders for one moment. Always renderable: on any failure the\nvariants are built from the deterministic source_card.",
+  "properties": {
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Claims",
+      "type": "array"
+    },
+    "evidence_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Event Ids",
+      "type": "array"
+    },
+    "expires_at_ms": {
+      "title": "Expires At Ms",
+      "type": "integer"
+    },
+    "insight_id": {
+      "minLength": 1,
+      "title": "Insight Id",
+      "type": "string"
+    },
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "outcome": {
+      "$ref": "#/$defs/Outcome"
+    },
+    "prompt_version": {
+      "minLength": 1,
+      "title": "Prompt Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "synthetic": {
+      "const": true,
+      "default": true,
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "trigger_clock_ms": {
+      "title": "Trigger Clock Ms",
+      "type": "integer"
+    },
+    "trigger_seq": {
+      "title": "Trigger Seq",
+      "type": "integer"
+    },
+    "variants": {
+      "items": {
+        "$ref": "#/$defs/PersonaText"
+      },
+      "title": "Variants",
+      "type": "array"
+    }
+  },
+  "required": [
+    "insight_id",
+    "match_id",
+    "snapshot_id",
+    "trigger_seq",
+    "trigger_clock_ms",
+    "expires_at_ms",
+    "outcome",
+    "variants",
+    "claims",
+    "evidence_event_ids",
+    "prompt_version"
+  ],
+  "title": "Insight",
+  "type": "object"
+}

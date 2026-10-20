@@ -7,6 +7,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # allow running as a plain script
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from contracts.agents import AnalystOutput, EditorReview, Insight, RunTrace, StoryOutput
 from contracts.api import ApiError, CardList, EventPage, Snapshot, WindowMetrics
 from contracts.events import MatchEvent, ScenarioMeta
 
@@ -22,6 +23,11 @@ def render_schemas() -> dict[str, str]:
         "event_page.schema.json": EventPage,
         "window_metrics.schema.json": WindowMetrics,
         "card_list.schema.json": CardList,
+        "analyst_output.schema.json": AnalystOutput,
+        "editor_review.schema.json": EditorReview,
+        "story_output.schema.json": StoryOutput,
+        "insight.schema.json": Insight,
+        "run_trace.schema.json": RunTrace,
     }
     return {
         name: json.dumps(model.model_json_schema(), indent=2, sort_keys=True) + "\n"

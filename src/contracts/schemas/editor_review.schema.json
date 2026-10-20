@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "ClaimReview": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "minLength": 1,
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 280,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "verdict": {
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "claim_id",
+        "verdict",
+        "reason"
+      ],
+      "title": "ClaimReview",
+      "type": "object"
+    },
+    "Verdict": {
+      "enum": [
+        "approved",
+        "rejected"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "minLength": 1,
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "repair_hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repair Hint"
+    },
+    "reviews": {
+      "items": {
+        "$ref": "#/$defs/ClaimReview"
+      },
+      "title": "Reviews",
+      "type": "array"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "snapshot_id",
+    "reviews"
+  ],
+  "title": "EditorReview",
+  "type": "object"
+}

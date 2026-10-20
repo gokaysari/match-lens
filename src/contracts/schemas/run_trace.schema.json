@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "Outcome": {
+      "enum": [
+        "published",
+        "fallback",
+        "abstained"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "Role": {
+      "enum": [
+        "tactical_analyst",
+        "evidence_editor",
+        "audience_storyteller",
+        "single_agent_baseline"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "StepStatus": {
+      "enum": [
+        "ok",
+        "invalid",
+        "rejected",
+        "timeout",
+        "error"
+      ],
+      "title": "StepStatus",
+      "type": "string"
+    },
+    "TraceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "latency_ms": {
+          "title": "Latency Ms",
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "status": {
+          "$ref": "#/$defs/StepStatus"
+        }
+      },
+      "required": [
+        "role",
+        "attempt",
+        "status",
+        "latency_ms"
+      ],
+      "title": "TraceStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "minLength": 1,
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/Outcome"
+    },
+    "run_id": {
+      "minLength": 1,
+      "title": "Run Id",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/TraceStep"
+      },
+      "title": "Steps",
+      "type": "array"
+    },
+    "total_latency_ms": {
+      "title": "Total Latency Ms",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "run_id",
+    "candidate_id",
+    "snapshot_id",
+    "steps",
+    "outcome",
+    "total_latency_ms"
+  ],
+  "title": "RunTrace",
+  "type": "object"
+}

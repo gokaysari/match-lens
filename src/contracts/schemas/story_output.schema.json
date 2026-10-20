@@ -1,0 +1,81 @@
+{
+  "$defs": {
+    "Persona": {
+      "enum": [
+        "analyst",
+        "casual"
+      ],
+      "title": "Persona",
+      "type": "string"
+    },
+    "PersonaText": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 320,
+          "minLength": 1,
+          "title": "Body",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "language": {
+          "const": "en",
+          "default": "en",
+          "title": "Language",
+          "type": "string"
+        },
+        "persona": {
+          "$ref": "#/$defs/Persona"
+        },
+        "title": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "persona",
+        "title",
+        "body",
+        "claim_ids"
+      ],
+      "title": "PersonaText",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "minLength": 1,
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "variants": {
+      "items": {
+        "$ref": "#/$defs/PersonaText"
+      },
+      "title": "Variants",
+      "type": "array"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "snapshot_id",
+    "variants"
+  ],
+  "title": "StoryOutput",
+  "type": "object"
+}
