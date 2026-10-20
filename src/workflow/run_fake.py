@@ -19,7 +19,7 @@ SCENARIO_DIR = Path(__file__).resolve().parents[2] / "scenarios" / "synthetic-01
 _CLAIMS = {
     "press_surge@2058": [
         {"claim_id": "c1", "kind": "observation",
-         "text": "Harbour Athletic made 16 pressures in Northbridge FC's half in the last 60 s.",
+         "text": "Harbour Athletic made 16 pressures in Northbridge FC's end of the pitch in the last 60 s.",
          "evidence_event_ids": ["e024", "e025"], "metric": ("pressures_opp_half", "hba")},
         {"claim_id": "c2", "kind": "interpretation",
          "text": "Northbridge FC completed 6 of 10 passes, which is consistent with the pressure "
@@ -40,7 +40,7 @@ _CLAIMS = {
 _VARIANTS = {
     "press_surge@2058": (
         ("Harbour pressed high", "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's "
-         "half; Northbridge completed 6 of 10 passes (60%)."),
+         "end of the pitch; Northbridge completed 6 of 10 passes (60%)."),
         ("Harbour hassled Northbridge", "Harbour Athletic kept closing Northbridge FC down near their own "
          "goal, which suggests Northbridge found it hard to keep the ball."),
     ),
@@ -62,8 +62,7 @@ def hand_written(candidate: MomentCandidate, bundle: EvidenceBundle) -> dict[str
         refs = []
         if c["metric"]:
             name, team = c["metric"]
-            ref = next(m for m in bundle.metrics if m.name.value == name and m.team_id == team)
-            refs.append(ref.model_dump(mode="json"))
+            refs.append({"name": name, "team_id": team})
         claims.append({"claim_id": c["claim_id"], "kind": c["kind"], "text": c["text"],
                        "evidence_event_ids": c["evidence_event_ids"], "metric_refs": refs})
     claim_ids = [c["claim_id"] for c in claims]

@@ -9,6 +9,7 @@ from collections.abc import Iterable, Sequence
 from contracts.agents import (
     AnalystOutput,
     Claim,
+    ClaimKind,
     EditorReview,
     EvidenceBundle,
     MomentCandidate,
@@ -18,11 +19,43 @@ from contracts.agents import (
 )
 from contracts.api import MetricValue
 
-_NUM = re.compile(r"\d+(?:\.\d+)?")
+_TIME = re.compile(r"(?<!\d)(\d{1,3}):(\d{2})(?!\d)")
+_NUM = re.compile(r"(?:(?<!\w)[-\u2212+])?(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)")
+_SAFE_ID = re.compile(r"[A-Za-z0-9_@/:.-]{1,32}")
+
+ONES = ("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
+        "sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety").split()
+NUMBER_WORDS = tuple(w for w in ONES if w != "one") + (
+    "hundred", "half", "halves", "double", "doubled", "twice", "triple", "tripled", "third", "thirds",
+    "quarter", "quarters", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+    "ninth", "tenth")
+# "one" is common English ("no one", "one of"); it counts as a number word only before these nouns
+ONE_COUNTED_NOUNS = ("goal", "pass", "passes", "shot", "shots", "chance", "press", "pressure", "minute",
+                     "minutes")
+_WORD = re.compile(r"\b(" + "|".join(dict.fromkeys(NUMBER_WORDS)) + r")\b|\b(\d+(?:st|nd|rd|th))\b", re.I)
+_ONE = re.compile(r"\b(one)\s+(?:" + "|".join(ONE_COUNTED_NOUNS) + r")\b", re.I)
+
+
+def safe_id(value: str) -> str:
+    """Only plain identifiers are echoed into check codes (and so into traces)."""
+    return value if _SAFE_ID.fullmatch(value) else "<invalid-id>"
 
 
 def numbers_in(text: str) -> list[float]:
-    return [float(m) for m in _NUM.findall(text)]
+    return [float(m.replace(",", "").replace("\u2212", "-")) for m in _NUM.findall(text)]
+
+
+def number_words_in(text: str) -> list[str]:
+    found = [(m.group(1) or m.group(2)).lower() for m in _WORD.finditer(text)]
+    found += [m.group(1).lower() for m in _ONE.finditer(text)]
+    return found
+
+
+def _strip_cited_clocks(text: str, clocks: set[tuple[int, int]]) -> str:
+    def repl(m: re.Match) -> str:
+        return " " if (int(m.group(1)), int(m.group(2))) in clocks else m.group(0)
+
+    return _TIME.sub(repl, text)
 
 
 def _fmt(n: float) -> str:
@@ -53,12 +86,6 @@ def card_numbers(candidate: MomentCandidate) -> set[float]:
     return out
 
 
-def _time_numbers(event_time_ms: int) -> set[float]:
-    s = event_time_ms // 1000
-    mm, ss = s // 60, s % 60
-    return {float(mm), float(ss), float(mm + 1)}  # mm:ss and minute-of-match
-
-
 def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: EvidenceBundle) -> tuple[str, ...]:
     codes: list[str] = []
     if out.candidate_id != candidate.candidate_id:
@@ -69,28 +96,40 @@ def check_analyst(out: AnalystOutput, candidate: MomentCandidate, bundle: Eviden
         codes.append("ABSTAIN_WITH_CLAIMS")
     if not out.abstain and not out.claims:
         codes.append("NO_CLAIMS")
+    if not out.abstain and len(out.claims) > 3:
+        codes.append("TOO_MANY_CLAIMS")
+    if not out.abstain and out.claims and not any(c.kind == ClaimKind.observation for c in out.claims):
+        codes.append("NO_OBSERVATION")
     by_id = {e.event_id: e for e in bundle.events}
+    metrics = {(m.name, m.team_id): m for m in bundle.metrics}
     card_nums = card_numbers(candidate)
     seen: set[str] = set()
     for c in out.claims:
+        cid = safe_id(c.claim_id)
         if c.claim_id in seen:
-            codes.append(f"DUPLICATE_CLAIM_ID:{c.claim_id}")
+            codes.append(f"DUPLICATE_CLAIM_ID:{cid}")
         seen.add(c.claim_id)
         allowed = set(card_nums)
+        clocks: set[tuple[int, int]] = set()
         for eid in c.evidence_event_ids:
             ev = by_id.get(eid)
             if ev is None:
-                codes.append(f"UNKNOWN_EVIDENCE:{eid}")
+                codes.append(f"UNKNOWN_EVIDENCE:{safe_id(eid)}")
             else:
-                allowed |= _time_numbers(ev.event_time_ms)
+                s = ev.event_time_ms // 1000
+                clocks.add((s // 60, s % 60))
         for ref in c.metric_refs:
-            if ref in bundle.metrics:
-                allowed |= metric_numbers(ref)
+            m = metrics.get((ref.name, ref.team_id))
+            if m is None:
+                codes.append(f"UNKNOWN_METRIC_REF:{ref.name.value}/{safe_id(ref.team_id)}")
             else:
-                codes.append(f"UNKNOWN_METRIC_REF:{ref.name.value}/{ref.team_id}")
-        for n in numbers_in(c.text):
+                allowed |= metric_numbers(m)
+        if "<" in c.text or ">" in c.text:
+            codes.append(f"MARKUP_FORBIDDEN:{cid}")
+        for n in numbers_in(_strip_cited_clocks(c.text, clocks)):
             if n not in allowed:
                 codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
+        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(c.text)]
     return _dedupe(codes)
 
 
@@ -104,13 +143,13 @@ def check_review(review: EditorReview, analyst_out: AnalystOutput, candidate: Mo
     seen: set[str] = set()
     for r in review.reviews:
         if r.claim_id not in known:
-            codes.append(f"UNKNOWN_CLAIM:{r.claim_id}")
+            codes.append(f"UNKNOWN_CLAIM:{safe_id(r.claim_id)}")
         elif r.claim_id in seen:
-            codes.append(f"DUPLICATE_REVIEW:{r.claim_id}")
+            codes.append(f"DUPLICATE_REVIEW:{safe_id(r.claim_id)}")
         seen.add(r.claim_id)
     for c in analyst_out.claims:
         if c.claim_id not in seen:
-            codes.append(f"MISSING_REVIEW:{c.claim_id}")
+            codes.append(f"MISSING_REVIEW:{safe_id(c.claim_id)}")
     rejected = any(r.verdict == Verdict.rejected for r in review.reviews)
     hint = bool(review.repair_hint and review.repair_hint.strip())
     if rejected and not hint:
@@ -140,18 +179,23 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
     for v in story.variants:
         bodies.setdefault(v.persona, v.body)
         allowed = set(card_nums)
+        if not v.claim_ids:
+            codes.append(f"NO_CLAIM_CITED:{v.persona.value}")
         for cid in v.claim_ids:
             claim = approved.get(cid)
             if claim is None:
-                codes.append(f"CLAIM_NOT_APPROVED:{cid}")
+                codes.append(f"CLAIM_NOT_APPROVED:{safe_id(cid)}")
             else:
                 allowed |= set(numbers_in(claim.text))
-        for n in numbers_in(v.title) + numbers_in(v.body):
+        shown = v.title + " " + v.body
+        nums = numbers_in(shown)
+        for n in nums:
             if n not in allowed:
                 codes.append(f"NUMBER_NOT_ALLOWED:{_fmt(n)}")
+        codes += [f"NUMBER_WORD:{w}" for w in number_words_in(shown)]
         if any(ch in v.title + v.body for ch in "<>"):
             codes.append(f"MARKUP_FORBIDDEN:{v.persona.value}")
-        if v.persona == Persona.casual and len(numbers_in(v.body)) > 1:
+        if v.persona == Persona.casual and len(nums) > 1:
             codes.append("CASUAL_TOO_MANY_NUMBERS")
     if Persona.analyst in bodies and Persona.casual in bodies and bodies[Persona.analyst] == bodies[Persona.casual]:
         codes.append("IDENTICAL_BODIES")

@@ -23,8 +23,9 @@ from contracts.agents import (
 from domain.ingest import load_scenario
 from workflow.candidates import build_candidates
 from workflow.coordinator import Timeouts, run_moment
-from workflow.run_fake import hand_written
-from workflow.single_agent import SingleAgentOutput, run_single
+from agent_fixtures import hand_written
+from agents.single_output import SingleAgentOutput
+from workflow.single_agent import run_single
 
 
 @pytest.fixture(scope="module")
@@ -222,7 +223,7 @@ def test_partial_approval_publishes_only_approved(press):
     _, hw = model_for(cand, bundle)
     rej = rejecting(hw, {"c2"})
     story = copy.deepcopy(hw["storyteller"])
-    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's half."
+    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures in Northbridge FC's end."
     for v in story["variants"]:
         v["claim_ids"] = ["c1"]
     m, _ = model_for(cand, bundle, analyst=[hw["analyst"], hw["analyst"]], editor=[rej, rej], story=[story])
@@ -383,6 +384,7 @@ def test_storyteller_input_has_no_events(press):
         assert f'"{e.event_id}"' not in input_json
     assert data["team_names"]["hba"] == "Harbour Athletic"
     assert sorted(data["personas"]) == ["analyst", "casual"]
+    assert data["source_fact"] == {"title": cand.source_card.title, "body": cand.source_card.body}
     assert [c["claim_id"] for c in data["approved_claims"]] == ["c1", "c2"]
 
 
@@ -422,11 +424,21 @@ def test_check_analyst_codes(press):
     assert "NO_CLAIMS" in codes(lambda d: d.update(claims=[]))
     assert "DUPLICATE_CLAIM_ID:c1" in codes(lambda d: d["claims"][1].update(claim_id="c1"))
     assert "UNKNOWN_EVIDENCE:e999" in codes(lambda d: d["claims"][0].update(evidence_event_ids=["e999"]))
-    assert "UNKNOWN_METRIC_REF:pressures_opp_half/hba" in codes(
-        lambda d: d["claims"][0]["metric_refs"][0].update(value=17.0))
+    assert "UNKNOWN_EVIDENCE:<invalid-id>" in codes(
+        lambda d: d["claims"][0].update(evidence_event_ids=["e" * 500]))
+    assert "UNKNOWN_METRIC_REF:pressures_opp_half/zzz" in codes(
+        lambda d: d["claims"][0]["metric_refs"][0].update(team_id="zzz"))
     assert "NUMBER_NOT_ALLOWED:42" in codes(lambda d: d["claims"][0].update(text="42 pressures"))
     # minute/second of a cited event are allowed: e024 is at 3539230 ms = 58:59
     assert codes(lambda d: d["claims"][0].update(text="Pressure at 58:59 hurt, 16 times.")) == ()
+    # ... but bare clock numbers and clocks of events that are not cited are not
+    assert "NUMBER_NOT_ALLOWED:58" in codes(lambda d: d["claims"][0].update(text="Pressure at minute 58."))
+    assert "NUMBER_NOT_ALLOWED:59" in codes(lambda d: d["claims"][0].update(text="Pressure after 59 s."))
+    assert "NUMBER_NOT_ALLOWED:59" in codes(lambda d: d["claims"][0].update(text="Pressure at 58:59.",
+                                                                            evidence_event_ids=["e022"]))
+    assert "TOO_MANY_CLAIMS" in codes(lambda d: d.update(claims=d["claims"] * 2))
+    assert "NO_OBSERVATION" in codes(lambda d: d["claims"][0].update(kind="interpretation"))
+    assert "MARKUP_FORBIDDEN:c1" in codes(lambda d: d["claims"][0].update(text="16 <b>pressures</b>"))
     # abstaining with no claims is valid
     assert check_analyst(AnalystOutput(candidate_id=cand.candidate_id, snapshot_id=cand.snapshot_id,
                                        claims=(), abstain=True), cand, bundle) == ()
@@ -465,11 +477,16 @@ def test_check_story_codes(press):
     assert "MISSING_PERSONA:casual" in codes(lambda d: d.update(variants=d["variants"][:1]))
     assert "DUPLICATE_PERSONA:analyst" in codes(lambda d: d["variants"][1].update(persona="analyst"))
     assert "CLAIM_NOT_APPROVED:c3" in codes(lambda d: d["variants"][0].update(claim_ids=["c3"]))
+    assert "NO_CLAIM_CITED:analyst" in codes(lambda d: d["variants"][0].update(claim_ids=[]))
     assert "NUMBER_NOT_ALLOWED:7" in codes(lambda d: d["variants"][0].update(title="Seven"[:0] + "7 presses"))
     assert "MARKUP_FORBIDDEN:analyst" in codes(lambda d: d["variants"][0].update(title="a > b"))
     assert "IDENTICAL_BODIES" in codes(lambda d: d["variants"][1].update(body=d["variants"][0]["body"]))
     assert "CASUAL_TOO_MANY_NUMBERS" in codes(
         lambda d: d["variants"][1].update(body="16 pressures and 6 of 10 passes."))
+    assert "CASUAL_TOO_MANY_NUMBERS" in codes(  # title and body count together
+        lambda d: d["variants"][1].update(title="16 pressures", body="Hassled for 60 s."))
+    assert "NUMBER_NOT_ALLOWED:1016" in codes(lambda d: d["variants"][0].update(body="1,016 pressures."))
+    assert "NUMBER_WORD:twice" in codes(lambda d: d["variants"][0].update(body="Twice as many pressures."))
     # a number from the source card but not from the referenced claims is allowed
     assert codes(lambda d: d["variants"][1].update(body="Harbour pressed for 60 s, a lot of hassle.")) == ()
 
@@ -516,3 +533,134 @@ def test_single_agent_timeout_and_error(press):
     m2.script(Role.single, ValueError("x"))
     insight, trace = run(run_single(cand, bundle, m2))
     assert insight.outcome == Outcome.fallback and trace.steps[0].detail == "ValueError"
+
+
+# ------------------------------------------------------------ review round 1
+
+
+def analyst_codes(press, mutate):
+    cand, bundle, hw = parts(press)
+    d = copy.deepcopy(hw["analyst"])
+    mutate(d)
+    return check_analyst(AnalystOutput.model_validate(d), cand, bundle)
+
+
+def test_arbitrary_numbers_with_cited_last_events_are_rejected(press):
+    cand, bundle = press
+    last = [e.event_id for e in bundle.events[-6:]]
+
+    def m(d):
+        d["claims"][0].update(text="Northbridge FC completed 48 of 52 passes.", evidence_event_ids=last)
+
+    codes = analyst_codes(press, m)
+    assert "NUMBER_NOT_ALLOWED:48" in codes and "NUMBER_NOT_ALLOWED:52" in codes
+
+
+def test_signed_and_grouped_numbers(press):
+    assert "NUMBER_NOT_ALLOWED:-16" in analyst_codes(press, lambda d: d["claims"][0].update(text="-16 pressures."))
+    assert "NUMBER_NOT_ALLOWED:1016" in analyst_codes(press, lambda d: d["claims"][0].update(text="1,016 pressures."))
+    assert analyst_codes(press, lambda d: d["claims"][0].update(text="16 pressures in 60 s, 6-10 passes.")) == ()
+
+
+@pytest.mark.parametrize("word", ["two", "Twenty", "ninety", "hundred", "half", "halves", "double", "doubled",
+                                  "twice", "triple", "tripled", "third", "thirds", "quarter", "quarters",
+                                  "first", "tenth", "3rd", "11th"])
+def test_number_words_rejected(press, word):
+    codes = analyst_codes(press, lambda d: d["claims"][0].update(text=f"Harbour made 16 pressures, {word} time."))
+    assert f"NUMBER_WORD:{word.lower()}" in codes
+
+
+def test_one_only_rejected_before_counted_noun(press):
+    assert "NUMBER_WORD:one" in analyst_codes(press, lambda d: d["claims"][0].update(text="Harbour won one goal."))
+    assert "NUMBER_WORD:one" in analyst_codes(press, lambda d: d["claims"][0].update(text="One shot, 16 pressures."))
+    assert analyst_codes(press, lambda d: d["claims"][0].update(text="No one escaped 16 pressures, one of them long.")) == ()
+
+
+def test_number_words_rejected_in_story(press):
+    cand, bundle, hw = parts(press)
+    s = copy.deepcopy(hw["storyteller"])
+    s["variants"][1]["body"] = "Harbour pressed twice as hard."
+    assert "NUMBER_WORD:twice" in check_story(StoryOutput.model_validate(s), AnalystOutput.model_validate(hw["analyst"]).claims, cand)
+
+
+def test_no_approved_observation_falls_back(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    rev = copy.deepcopy(hw["editor"])
+    rev["reviews"][0]["verdict"] = "rejected"
+    rev["repair_hint"] = "fix c1"
+    m, _ = model_for(cand, bundle, analyst=[hw["analyst"]] * 2, editor=[rev, rev])
+    insight, trace = run(run_moment(cand, bundle, m))
+    assert insight.outcome == Outcome.fallback and len(m.calls) == 4  # storyteller never called
+
+
+def test_budget_exhaustion_is_traced(press):
+    cand, bundle = press
+    clock = [0.0]
+
+    class Clocked(FakeModelClient):
+        async def generate(self, **kw):
+            clock[0] += 30.0
+            return await super().generate(**kw)
+
+    _, hw = model_for(cand, bundle)
+    m = Clocked("fake")
+    m.script(Role.analyst, json.dumps(hw["analyst"]))
+    m.script(Role.editor, json.dumps(hw["editor"]))
+    insight, trace = run(run_moment(cand, bundle, m, now=lambda: clock[0]))
+    last = trace.steps[-1]
+    assert (last.role, last.status, last.detail) == (Role.storyteller, StepStatus.timeout, "BudgetExceeded")
+
+
+def test_unexpected_exception_is_traced(press, monkeypatch):
+    cand, bundle = press
+    m, _ = model_for(cand, bundle)
+
+    def boom(*a):
+        raise KeyError("secret")
+
+    monkeypatch.setattr("workflow.coordinator.check_analyst", boom)
+    insight, trace = run(run_moment(cand, bundle, m))
+    assert insight.outcome == Outcome.fallback
+    assert (trace.steps[-1].status, trace.steps[-1].detail) == (StepStatus.error, "KeyError")
+
+
+def test_long_id_not_echoed_in_trace(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    bad = copy.deepcopy(hw["analyst"])
+    bad["claims"][0]["evidence_event_ids"] = ["x" * 500]
+    m, _ = model_for(cand, bundle, analyst=[bad, bad])
+    insight, trace = run(run_moment(cand, bundle, m))
+    assert "xxxxx" not in trace.model_dump_json() and "<invalid-id>" in trace.steps[0].detail
+
+
+def test_insight_keeps_only_cited_claims(press):
+    cand, bundle = press
+    _, hw = model_for(cand, bundle)
+    story = copy.deepcopy(hw["storyteller"])
+    story["variants"][0]["body"] = "In the last 60 s Harbour Athletic made 16 pressures."
+    for v in story["variants"]:
+        v["claim_ids"] = ["c1"]
+    m, _ = model_for(cand, bundle, story=[story])
+    insight, trace = run(run_moment(cand, bundle, m))
+    assert insight.outcome == Outcome.published and [c.claim_id for c in insight.claims] == ["c1"]
+    assert set(insight.evidence_event_ids) == set(hw["analyst"]["claims"][0]["evidence_event_ids"])
+
+
+def test_timed_out_call_is_cancelled(press):
+    cand, bundle = press
+    seen = []
+
+    class Slow(FakeModelClient):
+        async def generate(self, **kw):
+            try:
+                await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                seen.append("cancelled")
+                raise
+            return ""
+
+    t = Timeouts(analyst_s=0.05)
+    insight, trace = run(run_moment(cand, bundle, Slow("fake"), timeouts=t))
+    assert seen == ["cancelled"] and trace.steps[0].status == StepStatus.timeout

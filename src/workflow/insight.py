@@ -38,6 +38,7 @@ class Recorder:
         self.steps: list[TraceStep] = []
         self.model_ok = False  # at least one model call returned text
         self._start = self.t0
+        self.cur: tuple[Role, int] = (Role.analyst, 1)  # last model call attempted
 
     def _ms(self, since: float) -> int:
         return max(0, int((self.now() - since) * 1000))
@@ -49,9 +50,11 @@ class Recorder:
     async def call(self, model: ModelClient, role: Role, attempt: int, input_json: str,
                    timeout_s: float) -> str | None:
         remaining = self.total_s - (self.now() - self.t0)
-        if remaining <= 0:
-            raise BudgetExceeded()
+        self.cur = (role, attempt)
         self._start = self.now()
+        if remaining <= 0:
+            self._add(role, attempt, StepStatus.timeout, "BudgetExceeded")
+            raise BudgetExceeded()
         try:
             text = await asyncio.wait_for(
                 model.generate(role=role, system=load_prompt(role), input_json=input_json),
@@ -66,8 +69,11 @@ class Recorder:
         self.model_ok = True
         return text
 
+    def unexpected(self, exc: Exception) -> None:
+        self._add(*self.cur, StepStatus.error, type(exc).__name__)
+
     def done(self, role: Role, attempt: int, status: StepStatus, codes: Sequence[str] = ()) -> None:
-        self._add(role, attempt, status, ",".join(codes) or None)
+        self._add(role, attempt, status, ",".join(codes)[:400] or None)
 
     def trace(self, candidate: MomentCandidate, outcome: Outcome) -> RunTrace:
         return RunTrace(run_id=f"{candidate.candidate_id}/run", candidate_id=candidate.candidate_id,
@@ -87,13 +93,12 @@ def _metric_text(m: MetricValue) -> str:
 
 def template_variants(candidate: MomentCandidate) -> tuple[PersonaText, ...]:
     card = candidate.source_card
-    ref = (f"template:{card.card_id}",)  # PersonaText requires >= 1 claim id; no claims on fallback
     analyst_body = card.body
     if card.metrics:
         analyst_body += " Metrics: " + "; ".join(_metric_text(m) for m in card.metrics) + "."
     return (
-        PersonaText(persona=Persona.analyst, title=card.title[:60], body=analyst_body[:320], claim_ids=ref),
-        PersonaText(persona=Persona.casual, title=card.title[:60], body=card.body[:320], claim_ids=ref),
+        PersonaText(persona=Persona.analyst, title=card.title[:60], body=analyst_body[:320]),
+        PersonaText(persona=Persona.casual, title=card.title[:60], body=card.body[:320]),
     )
 
 
@@ -118,6 +123,8 @@ def fallback_result(candidate: MomentCandidate, rec: Recorder, model: ModelClien
 def published_result(candidate: MomentCandidate, bundle: EvidenceBundle, rec: Recorder, model: ModelClient,
                      story: StoryOutput, claims: Sequence[Claim]) -> tuple[Insight, RunTrace]:
     seq = {e.event_id: e.sequence for e in bundle.events}
+    cited = {cid for v in story.variants for cid in v.claim_ids}
+    claims = [c for c in claims if c.claim_id in cited]
     ids = sorted({i for c in claims for i in c.evidence_event_ids}, key=seq.__getitem__)
     order = {p: i for i, p in enumerate(Persona)}
     variants = sorted(story.variants, key=lambda v: order[v.persona])

@@ -5,10 +5,9 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 
-from pydantic import BaseModel, ConfigDict
-
 from agents.checks import check_analyst, check_story
 from agents.model import ModelClient
+from agents.single_output import SingleAgentOutput
 from contracts.agents import (
     AnalystOutput,
     EvidenceBundle,
@@ -21,15 +20,7 @@ from contracts.agents import (
     StoryOutput,
 )
 from workflow.coordinator import dumps, parse
-from workflow.insight import Recorder, fallback_result, published_result
-
-
-class SingleAgentOutput(BaseModel):
-    """Local to the baseline (not a contract change): analysis and story in one reply."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    analysis: AnalystOutput
-    story: StoryOutput
+from workflow.insight import BudgetExceeded, Recorder, fallback_result, published_result
 
 
 async def run_single(
@@ -56,5 +47,8 @@ async def run_single(
         if out.analysis.abstain:
             return fallback_result(candidate, rec, model, Outcome.abstained)
         return published_result(candidate, bundle, rec, model, out.story, out.analysis.claims)
-    except Exception:  # noqa: BLE001
+    except BudgetExceeded:
+        return fallback_result(candidate, rec, model)
+    except Exception as exc:  # noqa: BLE001
+        rec.unexpected(exc)
         return fallback_result(candidate, rec, model)

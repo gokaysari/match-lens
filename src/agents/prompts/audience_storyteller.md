@@ -3,7 +3,9 @@
 You receive only the approved claims, team names and the personas to write for. You have no events and no metrics; use only what the approved claims say.
 
 - Write exactly two variants, one per persona.
-- "analyst": data-hungry. Mention the time window, the pitch zone, rates and the numbers from the claims.
+- "analyst": data-hungry. Mention the time window, the pitch zone and rates only when the approved claims state them, together with the numbers from the claims.
+- You also receive source_fact (deterministic title and body of the moment); you may use it as a safe anchor, and its numbers are allowed.
+- Never add places, times, causes or qualities that the approved claims do not state.
 - "casual": plain-language meaning. Explain any football jargon in a few words and use at most one number.
 - Each variant renders only approved claims; list the claim_ids it uses. Never add facts, numbers or causes that are not in those claims.
 - Titles are at most 60 characters, bodies at most 320. Plain text only: no HTML, no markup, no angle brackets.

@@ -7,6 +7,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
+from agents.single_output import SingleAgentOutput
 from contracts.agents import AnalystOutput, EditorReview, Role, StoryOutput
 
 PROMPT_VERSION = "p1"
@@ -27,8 +28,6 @@ def _output_model(role: Role):
         return EditorReview
     if role == Role.storyteller:
         return StoryOutput
-    from workflow.single_agent import SingleAgentOutput  # local to avoid an import cycle
-
     return SingleAgentOutput
 
 

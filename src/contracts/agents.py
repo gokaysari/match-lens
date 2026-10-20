@@ -20,9 +20,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from contracts.api import Card, MetricValue
+from contracts.api import Card, MetricName, MetricValue
 from contracts.events import SCHEMA_VERSION, MatchEvent, SInt, SStr
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
@@ -79,15 +79,25 @@ class ClaimKind(StrEnum):
     interpretation = "interpretation"  # a football reading of observations; hedged
 
 
+class MetricRef(BaseModel):
+    """Points at one bundle metric by (name, team_id); the value is looked up by
+    code, never copied by the model."""
+
+    model_config = _FROZEN
+    name: MetricName
+    team_id: SStr
+
+
 class Claim(BaseModel):
     model_config = _FROZEN
     claim_id: SStr  # unique within one AnalystOutput, e.g. "c1"
     kind: ClaimKind
     text: str = Field(min_length=1, max_length=280)
     evidence_event_ids: tuple[str, ...] = Field(min_length=1)
-    # metrics whose values the text quotes; every number in `text` must come
-    # from these (value, numerator, denominator, or value as a whole percent)
-    metric_refs: tuple[MetricValue, ...] = ()
+    # metrics whose values the text quotes; every bare number in `text` must be
+    # one of their values (value, numerator, denominator, ratio as whole percent),
+    # a number of the source card, or a cited event's clock written as mm:ss
+    metric_refs: tuple[MetricRef, ...] = ()
 
 
 class AnalystOutput(BaseModel):
@@ -132,7 +142,8 @@ class PersonaText(BaseModel):
     language: Literal["en"] = "en"
     title: str = Field(min_length=1, max_length=60)
     body: str = Field(min_length=1, max_length=320)
-    claim_ids: tuple[str, ...] = Field(min_length=1)  # approved claims it renders
+    # approved claims it renders; empty only for template (fallback/abstained) text
+    claim_ids: tuple[str, ...] = ()
 
 
 class StoryOutput(BaseModel):
@@ -187,6 +198,19 @@ class Insight(BaseModel):
     model_id: str | None = None  # deployment name used; None for fallback-only runs
     prompt_version: SStr
     synthetic: Literal[True] = True
+
+    @model_validator(mode="after")
+    def _variants_match_outcome(self) -> "Insight":
+        if {v.persona for v in self.variants} != set(Persona) or len(self.variants) != len(Persona):
+            raise ValueError("exactly one variant per persona")
+        claim_ids = {c.claim_id for c in self.claims}
+        for v in self.variants:
+            if self.outcome is Outcome.published:
+                if not v.claim_ids or not set(v.claim_ids) <= claim_ids:
+                    raise ValueError("published variants must cite published claims")
+            elif v.claim_ids or self.claims:
+                raise ValueError("template variants carry no claims")
+        return self
 
 
 class RunTrace(BaseModel):

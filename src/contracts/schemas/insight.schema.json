@@ -22,7 +22,7 @@
         "metric_refs": {
           "default": [],
           "items": {
-            "$ref": "#/$defs/MetricValue"
+            "$ref": "#/$defs/MetricRef"
           },
           "title": "Metric Refs",
           "type": "array"
@@ -66,82 +66,24 @@
       "title": "MetricName",
       "type": "string"
     },
-    "MetricValue": {
+    "MetricRef": {
       "additionalProperties": false,
+      "description": "Points at one bundle metric by (name, team_id); the value is looked up by\ncode, never copied by the model.",
       "properties": {
-        "definition_version": {
-          "const": "metrics-v1",
-          "default": "metrics-v1",
-          "title": "Definition Version",
-          "type": "string"
-        },
-        "denominator": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Denominator"
-        },
-        "event_ids": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Event Ids",
-          "type": "array"
-        },
         "name": {
           "$ref": "#/$defs/MetricName"
-        },
-        "numerator": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Numerator"
         },
         "team_id": {
           "minLength": 1,
           "title": "Team Id",
           "type": "string"
-        },
-        "unit": {
-          "enum": [
-            "count",
-            "ratio"
-          ],
-          "title": "Unit",
-          "type": "string"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Value"
         }
       },
       "required": [
         "name",
-        "team_id",
-        "value",
-        "unit",
-        "event_ids"
+        "team_id"
       ],
-      "title": "MetricValue",
+      "title": "MetricRef",
       "type": "object"
     },
     "Outcome": {
@@ -171,10 +113,10 @@
           "type": "string"
         },
         "claim_ids": {
+          "default": [],
           "items": {
             "type": "string"
           },
-          "minItems": 1,
           "title": "Claim Ids",
           "type": "array"
         },
@@ -197,8 +139,7 @@
       "required": [
         "persona",
         "title",
-        "body",
-        "claim_ids"
+        "body"
       ],
       "title": "PersonaText",
       "type": "object"

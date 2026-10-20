@@ -18,10 +18,10 @@
           "type": "string"
         },
         "claim_ids": {
+          "default": [],
           "items": {
             "type": "string"
           },
-          "minItems": 1,
           "title": "Claim Ids",
           "type": "array"
         },
@@ -44,8 +44,7 @@
       "required": [
         "persona",
         "title",
-        "body",
-        "claim_ids"
+        "body"
       ],
       "title": "PersonaText",
       "type": "object"

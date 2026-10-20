@@ -14,6 +14,7 @@ from agents.checks import check_analyst, check_review, check_story
 from agents.model import ModelClient
 from contracts.agents import (
     AnalystOutput,
+    ClaimKind,
     EditorReview,
     EvidenceBundle,
     Insight,
@@ -26,7 +27,7 @@ from contracts.agents import (
     StoryOutput,
     Verdict,
 )
-from workflow.insight import Recorder, fallback_result, published_result
+from workflow.insight import BudgetExceeded, Recorder, fallback_result, published_result
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,10 @@ async def run_moment(
     rec = Recorder(now, timeouts.total_s)
     try:
         return await _run(candidate, bundle, model, timeouts, rec)
-    except Exception:  # noqa: BLE001 - run_moment never raises; anything unexpected is a fallback
+    except BudgetExceeded:  # already traced
+        return fallback_result(candidate, rec, model)
+    except Exception as exc:  # noqa: BLE001 - run_moment never raises; anything unexpected is a fallback
+        rec.unexpected(exc)
         return fallback_result(candidate, rec, model)
 
 
@@ -102,11 +106,12 @@ async def _run(candidate, bundle, model, timeouts: Timeouts, rec: Recorder):
 
     ok_ids = {r.claim_id for r in review.reviews if r.verdict == Verdict.approved}
     approved = tuple(c for c in out.claims if c.claim_id in ok_ids)
-    if not approved:
+    if not any(c.kind == ClaimKind.observation for c in approved):
         return fail()
 
     story_payload = {
         "candidate_id": candidate.candidate_id, "snapshot_id": candidate.snapshot_id,
+        "source_fact": {"title": candidate.source_card.title, "body": candidate.source_card.body},
         "team_names": bundle.team_names, "personas": [p.value for p in Persona],
         "approved_claims": [{"claim_id": c.claim_id, "kind": c.kind.value, "text": c.text} for c in approved],
     }

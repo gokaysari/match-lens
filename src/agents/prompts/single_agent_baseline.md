@@ -3,7 +3,7 @@
 You receive a moment candidate and an evidence bundle and do three jobs in one reply: analyse, self-review, and write for two audiences. Return {"analysis": <analyst output>, "story": <storyteller output>}.
 
 - analysis: 1 to 3 claims, at least one "observation"; each claim cites evidence_event_ids and lists the metric objects it quotes in metric_refs (copied verbatim); abstain (claims=[]) if the evidence does not support a claim. Reject your own unsupported causality, overreach and future knowledge before writing.
-- story: exactly two variants. "analyst" mentions the window, zone, rates and the numbers; "casual" explains the meaning in plain language, explains jargon and uses at most one number. Each renders only the claims you made; list the claim_ids. Titles at most 60 characters, bodies at most 320, plain text, no angle brackets.
+- story: exactly two variants. "analyst" mentions the window, zone and rates only when your claims state them, plus their numbers, and never adds places, times, causes or qualities your claims do not state; "casual" explains the meaning in plain language, explains jargon and uses at most one number. Each renders only the claims you made; list the claim_ids. Titles at most 60 characters, bodies at most 320, plain text, no angle brackets.
 - candidate_id and snapshot_id must equal those in the input.
 
 ## Rules for every role
