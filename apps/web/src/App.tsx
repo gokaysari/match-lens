@@ -75,9 +75,13 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
       : null;
   const score = snapshot?.score;
   const announcement =
-    analysis.status === "unavailable" ? "Analysis unavailable" : analysis.recovered ? "Analysis restored" : "";
-  const periodStart = events.find((e) => e.period === current.period)!;
-  const sincePeriodStart = current.event_time_ms - periodStart.event_time_ms < 60000;
+    analysis.settled === "unavailable" ? "Analysis unavailable" : analysis.recovered ? "Analysis restored" : "";
+  const metricsEvent = metrics
+    ? events.find((e) => e.sequence === seqOfSnapshotId(metrics.snapshot_id))
+    : undefined;
+  const periodStart = metricsEvent && events.find((e) => e.period === metricsEvent.period);
+  const sincePeriodStart =
+    !!metricsEvent && !!periodStart && metricsEvent.event_time_ms - periodStart.event_time_ms < 60000;
 
   return (
     <main>

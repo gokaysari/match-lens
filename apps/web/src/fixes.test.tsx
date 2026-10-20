@@ -68,7 +68,7 @@ describe("1. never show analysis from past the watermark", () => {
 });
 
 describe("4. late responses are not rendered", () => {
-  it("ignores a response that ignores the abort signal and resolves after the watermark moved", async () => {
+  it("ignores a superseded response that ignores the abort signal and resolves late", async () => {
     const user = userEvent.setup();
     let resolveLate: () => void = () => {};
     const api = await renderApp({
@@ -81,12 +81,14 @@ describe("4. late responses are not rendered", () => {
     });
     await waitFor(() => expect(api.forEndpoint("snapshot").length).toBe(1));
     await user.click(screen.getByRole("button", { name: "Step forward" }));
+    // a newer request must have been issued (superseding the hung one) before it resolves late
+    await waitFor(() => expect(api.forEndpoint("snapshot").length).toBe(2));
+    await waitFor(() => expect(score("Home")).toHaveTextContent("4"));
     await act(async () => {
       resolveLate();
       await new Promise((r) => setTimeout(r, 20));
     });
-    expect(score("Home")).toHaveTextContent("–");
-    await waitFor(() => expect(score("Home")).toHaveTextContent("4"));
+    expect(score("Home")).toHaveTextContent("4");
   });
 });
 
