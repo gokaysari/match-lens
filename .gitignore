@@ -8,3 +8,6 @@ mcp-tests/.playwright-mcp/
 __pycache__/
 .pytest_cache/
 *.egg-info/
+
+# Playwright artifacts
+apps/web/e2e/artifacts/
