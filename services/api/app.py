@@ -16,11 +16,11 @@ from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
-from contracts.api import ApiError, CardList, EventPage, Snapshot, WindowMetrics  # noqa: E402
+from contracts.api import ApiError, CardList, MatchInfo, EventPage, Snapshot, WindowMetrics  # noqa: E402
 from contracts.events import MatchEvent, ScenarioMeta  # noqa: E402
 from domain.cards import compute_cards  # noqa: E402
 from domain.errors import DomainError  # noqa: E402
-from domain.ingest import load_scenario  # noqa: E402
+from domain.ingest import IngestError, load_scenario  # noqa: E402
 from domain.metrics import WINDOW_S_DEFAULT, WINDOW_S_MAX, WINDOW_S_MIN, compute_window_metrics  # noqa: E402
 from domain.snapshot import build_snapshot, snapshot_id, visible_events  # noqa: E402
 
@@ -40,6 +40,8 @@ def load_matches(directory: Path) -> dict[str, tuple[ScenarioMeta, list[MatchEve
     matches: dict[str, tuple[ScenarioMeta, list[MatchEvent]]] = {}
     for sub in sorted(p for p in Path(directory).iterdir() if p.is_dir() and not p.name.startswith((".", "__"))):
         meta, events = load_scenario(sub)
+        if meta.match_id in matches:
+            raise IngestError("DUPLICATE_MATCH", f"match_id {meta.match_id} defined by more than one scenario ({sub.name})")
         matches[meta.match_id] = (meta, events)
     return matches
 
@@ -80,9 +82,12 @@ def create_app(scenarios_dir: str | Path | None = None) -> FastAPI:
 
     R = {404: {"model": ApiError}, 422: {"model": ApiError}}
 
-    @app.get("/api/matches/{match_id}/meta", response_model=ScenarioMeta, responses=R)
+    @app.get("/api/matches/{match_id}/meta", response_model=MatchInfo, responses=R)
     def get_meta(match_id: str):
-        return match(match_id)[0]
+        m = match(match_id)[0]
+        return MatchInfo(match_id=m.match_id, teams=tuple(m.teams), players=tuple(m.players),
+                         initial_score=m.initial_score, segment_start_ms=m.segment_start_ms,
+                         segment_end_ms=m.segment_end_ms)
 
     @app.get("/api/matches/{match_id}/snapshot", response_model=Snapshot, responses=R)
     def get_snapshot(match_id: str, at_seq: int):
