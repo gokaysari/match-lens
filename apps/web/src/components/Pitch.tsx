@@ -1,11 +1,10 @@
+import { useRef } from "react";
 import type { MatchEvent, ScenarioMeta } from "../api/types";
 import { mmss } from "../lib/format";
 
 export const TEAM_COLORS = { home: "#1d4ed8", away: "#c2410c" } as const;
 const TRAIL = 6;
 const ARROW_TYPES = new Set(["pass", "carry", "shot"]);
-
-const warned = new Set<string>();
 
 export function playerName(meta: ScenarioMeta, id: string): string {
   return meta.players.find((p) => p.id === id)?.name ?? id;
@@ -36,14 +35,15 @@ function PitchMarkings() {
 }
 
 export function Pitch({ events, index, meta }: { events: MatchEvent[]; index: number; meta: ScenarioMeta }) {
+  const warned = useRef(new Set<string>());
   const sideOf = (teamId: string) => meta.teams.find((t) => t.id === teamId)?.side;
   const upTo = events.slice(0, index + 1);
   const drawable = upTo
     .filter((e) => {
       if (e.x === null || e.y === null) return false;
       if (sideOf(e.team_id)) return true;
-      if (!warned.has(e.team_id)) {
-        warned.add(e.team_id);
+      if (!warned.current.has(e.team_id)) {
+        warned.current.add(e.team_id);
         console.warn(`Pitch: skipping events of unknown team_id "${e.team_id}"`);
       }
       return false;

@@ -44,19 +44,22 @@ export function seqOfSnapshotId(id: string): number {
 
 /**
  * Fetches snapshot, metrics and cards for the watermark. Leading + trailing throttle
- * (THROTTLE_MS) so fast playback still gets periodic updates; issuing a request aborts the
- * previous one. Only responses for the latest requested seq whose snapshot_id matches are kept.
- * Callers must still hide data whose seq is past their watermark.
+ * (THROTTLE_MS) so fast playback still gets periodic updates. Only issuing a new request aborts
+ * the previous one; a response is applied if it belongs to the most recently issued request, its
+ * snapshot_id matches its own at_seq, and at_seq is not past the current watermark.
+ * `settled` is the last applied outcome (never the transient loading state).
  */
 export function useAnalysis(matchId: string, seq: number) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [metrics, setMetrics] = useState<WindowMetrics | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [status, setStatus] = useState<AnalysisStatus>("loading");
+  const [settled, setSettled] = useState<"ready" | "unavailable" | null>(null);
   const [recovered, setRecovered] = useState(false);
   const wasUnavailable = useRef(false);
 
   const latest = useRef(seq);
+  const issuedId = useRef(0);
   const lastIssued = useRef(-Infinity);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ctl = useRef<AbortController | null>(null);
@@ -67,6 +70,7 @@ export function useAnalysis(matchId: string, seq: number) {
     ctl.current?.abort();
     const c = new AbortController();
     ctl.current = c;
+    const id = ++issuedId.current;
     const at = latest.current;
     const expected = `${matchId}@${at}`;
     const valid = <T extends { snapshot_id: string }>(r: PromiseSettledResult<T>): T | null =>
@@ -76,23 +80,29 @@ export function useAnalysis(matchId: string, seq: number) {
       getMetrics(matchId, at, WINDOW_S, c.signal),
       getCards(matchId, at, c.signal),
     ]).then(([s, m, k]) => {
-      if (c.signal.aborted || latest.current !== at) return;
+      if (id !== issuedId.current || at > latest.current) return;
       const sv = valid(s), mv = valid(m), kv = valid(k);
       if (sv) setSnapshot(sv);
       if (mv) setMetrics(mv);
       if (kv) setCards(kv.cards);
       const ok = !!(sv && mv && kv);
-      if (!ok) wasUnavailable.current = true;
-      else if (wasUnavailable.current) setRecovered(true);
-      if (!ok) setRecovered(false);
-      setStatus(ok ? "ready" : "unavailable");
+      if (!ok) {
+        wasUnavailable.current = true;
+        setRecovered(false);
+      } else if (wasUnavailable.current) {
+        wasUnavailable.current = false;
+        setRecovered(true);
+      } else {
+        setRecovered(false);
+      }
+      setSettled(ok ? "ready" : "unavailable");
+      setStatus(at === latest.current ? (ok ? "ready" : "unavailable") : "loading");
     });
   }, [matchId]);
 
   useEffect(() => {
     latest.current = seq;
     setStatus("loading");
-    ctl.current?.abort();
     if (timer.current) return; // a trailing call is already scheduled and will read latest
     const wait = lastIssued.current + THROTTLE_MS - Date.now();
     if (wait <= 0) issue();
@@ -108,5 +118,5 @@ export function useAnalysis(matchId: string, seq: number) {
     [],
   );
 
-  return { snapshot, metrics, cards, status, recovered };
+  return { snapshot, metrics, cards, status, settled, recovered };
 }

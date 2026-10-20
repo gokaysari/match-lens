@@ -21,7 +21,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); }
 .team.away { color: var(--away); }
 .score { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
-.analysis-status { flex-basis: 100%; text-align: center; margin: 0; min-height: 1.2em; font-size: 0.85rem; color: var(--muted); }
+.analysis-status { flex-basis: 100%; text-align: center; margin: 0; font-size: 0.85rem; color: var(--muted); }
+.analysis-status:empty { display: none; }
+p.analysis-status:empty { display: block; flex-basis: 0; width: 0; height: 0; overflow: hidden; }
 .analysis-status[data-state="unavailable"] { color: #991b1b; font-weight: 600; }
 .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; margin-top: 12px; }
 .pitch { margin: 0; }
