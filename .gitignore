@@ -18,3 +18,4 @@ reports/
 research_notes/
 mcp-tests/results.json
 mcp-tests/azure-tools.json
+mcp-tests/audit.json

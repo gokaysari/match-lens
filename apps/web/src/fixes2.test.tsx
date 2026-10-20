@@ -25,7 +25,7 @@ async function renderApp(opts?: MockOptions) {
 }
 
 describe("1. liveness under backend latency", () => {
-  it("applies responses during 16x-style playback when latency exceeds the step interval", async () => {
+  it("applies responses during playback when 150 ms latency exceeds the 125 ms step interval", async () => {
     vi.useFakeTimers();
     installMockApi();
     // add 150 ms latency on top of the mock
@@ -131,16 +131,16 @@ describe("4. throttling", () => {
   });
 });
 
-describe("5. metrics caption comes from the metrics' own seq", () => {
-  it("shows 'Since period start' for early metrics even when the watermark moved past 60 s", async () => {
+describe("5. metrics caption comes from the metrics' own window", () => {
+  it("keeps the replay-start caption for early metrics even when the watermark moved on", async () => {
     await renderApp({
       override: (ep, seq) =>
         ep === "metrics" && seq !== null && seq > 2001 ? new Promise<Response>(() => {}) : undefined,
     });
-    expect(await screen.findByRole("table", { name: "Since period start" })).toBeInTheDocument();
+    expect(await screen.findByText("Since 58:00 (replay start)")).toBeInTheDocument();
     goTo(2050);
     await sleep(450);
-    expect(screen.getByRole("table", { name: "Since period start" })).toBeInTheDocument();
+    expect(screen.getByText("Since 58:00 (replay start)")).toBeInTheDocument();
   });
 });
 

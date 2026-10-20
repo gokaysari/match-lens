@@ -1,4 +1,5 @@
-"""Single-agent baseline for evaluation: one call, same checks, same fallback rules."""
+"""Single-agent baseline for evaluation: same inputs, same checks, same fallback rules, one
+repair round for check failures and the same total time budget as the pipeline."""
 
 from __future__ import annotations
 
@@ -9,43 +10,53 @@ from agents.checks import check_analyst, check_story
 from agents.model import ModelClient
 from agents.single_output import SingleAgentOutput
 from contracts.agents import (
-    AnalystOutput,
     EvidenceBundle,
     Insight,
+    InsightOutcome,
     MomentCandidate,
-    Outcome,
     Role,
     RunTrace,
     StepStatus,
-    StoryOutput,
 )
-from workflow.coordinator import dumps, parse
+from workflow.coordinator import base_payload, dumps, parse, repair_request
 from workflow.insight import BudgetExceeded, Recorder, fallback_result, published_result
+
+
+def _check(out: SingleAgentOutput, candidate: MomentCandidate, bundle: EvidenceBundle) -> tuple[str, ...]:
+    codes = check_analyst(out.analysis, candidate, bundle)
+    if codes or out.analysis.abstain:
+        return codes
+    if out.story is None:
+        return ("NO_STORY",)
+    return check_story(out.story, out.analysis.claims, candidate, bundle)  # no editor: all claims count
 
 
 async def run_single(
     candidate: MomentCandidate, bundle: EvidenceBundle, model: ModelClient, *,
-    timeout_s: float = 30, now: Callable[[], float] = time.monotonic,
+    timeout_s: float = 30, total_s: float = 45, now: Callable[[], float] = time.monotonic,
 ) -> tuple[Insight, RunTrace]:
-    rec = Recorder(now, timeout_s)
+    """timeout_s limits one call; total_s is the budget for the call and its single repair.
+    Never raises except asyncio.CancelledError (see run_moment)."""
+    rec = Recorder(now, total_s)
     try:
-        payload = {"candidate": candidate.model_dump(mode="json"), "bundle": bundle.model_dump(mode="json")}
-        text = await rec.call(model, Role.single, 1, dumps(payload), timeout_s)
-        if text is None:
-            return fallback_result(candidate, rec, model)
-        out = parse(SingleAgentOutput, text)
-        if out is None:
-            codes: tuple[str, ...] = ("SCHEMA_INVALID",)
-        else:
-            codes = check_analyst(out.analysis, candidate, bundle)
-            if not codes and not out.analysis.abstain:
-                codes = check_story(out.story, out.analysis.claims, candidate)  # no editor: all claims count
-        if codes:
-            rec.done(Role.single, 1, StepStatus.invalid, codes)
-            return fallback_result(candidate, rec, model)
-        rec.done(Role.single, 1, StepStatus.ok)
+        base = base_payload(candidate, bundle)
+        payload, attempt = base, 1
+        while True:
+            text = await rec.call(model, Role.single, attempt, dumps(payload), timeout_s)
+            if text is None:
+                return fallback_result(candidate, rec, model)
+            out = parse(SingleAgentOutput, text)
+            codes = ("SCHEMA_INVALID",) if out is None else _check(out, candidate, bundle)
+            if not codes:
+                break
+            rec.done(Role.single, attempt, StepStatus.invalid, codes)
+            if attempt == 2:
+                return fallback_result(candidate, rec, model)
+            attempt = 2
+            payload = {**base, "repair": repair_request(codes, text, out)}
+        rec.done(Role.single, attempt, StepStatus.ok)
         if out.analysis.abstain:
-            return fallback_result(candidate, rec, model, Outcome.abstained)
+            return fallback_result(candidate, rec, model, InsightOutcome.abstained)
         return published_result(candidate, bundle, rec, model, out.story, out.analysis.claims)
     except BudgetExceeded:
         return fallback_result(candidate, rec, model)

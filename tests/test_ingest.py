@@ -58,7 +58,7 @@ def test_clock_reset_across_periods_ok(make_scenario):
 
 
 def test_decreasing_period_is_clock_regression(make_scenario):
-    err = code_of(make_scenario, [ev(period=2), ev(event_id="e2", sequence=2, period=1, event_time_ms=5)])
+    err = code_of(make_scenario, [ev(period=2, event_time_ms=2_800_000), ev(event_id="e2", sequence=2, period=1, event_time_ms=5)])
     assert err.code == "CLOCK_REGRESSION" and err.event_ids == ["e2"]
 
 
@@ -83,7 +83,67 @@ def test_player_on_wrong_team_is_unknown_player(make_scenario):
 
 
 def test_null_player_allowed(make_scenario):
-    load_scenario(make_scenario([ev(player_id=None)]))
+    load_scenario(make_scenario([ev(type="foul", player_id=None, possession_id=None, outcome=None,
+                                    recipient_player_id=None, end_x=None, end_y=None)]))
+
+
+@pytest.mark.parametrize("t,extra", [
+    ("pass", {"recipient_player_id": None}),
+    ("shot", {"recipient_player_id": None, "end_x": 90.0, "end_y": 30.0}),
+    ("tackle", {"recipient_player_id": None, "end_x": None, "end_y": None}),
+    ("dribble", {"recipient_player_id": None, "end_x": None, "end_y": None}),
+])
+def test_missing_outcome(make_scenario, t, extra):
+    err = code_of(make_scenario, [ev(type=t, outcome=None, **extra)])
+    assert err.code == "MISSING_OUTCOME" and err.event_ids == ["e1"]
+
+
+def test_missing_player_on_ball(make_scenario):
+    err = code_of(make_scenario, [ev(player_id=None)])
+    assert err.code == "MISSING_PLAYER" and err.event_ids == ["e1"]
+
+
+def test_period2_clock_mismatch(make_scenario):
+    err = code_of(make_scenario, [ev(period=2, event_time_ms=2_699_999)])
+    assert err.code == "PERIOD_CLOCK_MISMATCH" and err.event_ids == ["e1"]
+
+
+def test_seed_mismatch(make_scenario):
+    err = code_of(make_scenario, [ev(scenario_seed=2)])
+    assert err.code == "SEED_MISMATCH" and err.event_ids == ["e1"]
+
+
+def test_possession_used_by_two_teams(make_scenario):
+    err = code_of(make_scenario, [ev(), ev(event_id="e2", sequence=2, team_id="hba", player_id="hba-04",
+                                           recipient_player_id="hba-09")])
+    assert err.code == "POSSESSION_INCONSISTENT" and err.event_ids == ["e2"]
+
+
+def test_possession_reappears(make_scenario):
+    err = code_of(make_scenario, [ev(), ev(event_id="e2", sequence=2, possession_id="p02"),
+                                  ev(event_id="e3", sequence=3, possession_id="p01")])
+    assert err.code == "POSSESSION_INCONSISTENT" and err.event_ids == ["e3"]
+
+
+def test_duplicate_moment_keys(make_scenario):
+    m = base_meta()
+    m["moments"] = m["moments"] * 2
+    assert code_of(make_scenario, [ev()], m).code == "INVALID_META"
+
+
+def test_duplicate_shirt_numbers_in_team(make_scenario):
+    m = base_meta()
+    m["players"][1]["shirt_number"] = 7
+    assert code_of(make_scenario, [ev()], m).code == "INVALID_META"
+
+
+@pytest.mark.parametrize("name", ["meta.json", "events.jsonl"])
+def test_invalid_encoding(make_scenario, name):
+    d = make_scenario([ev()])
+    (d / name).write_bytes(b"\xff\xfe\x00bad")
+    with pytest.raises(IngestError) as ei:
+        load_scenario(d)
+    assert ei.value.code == "INVALID_ENCODING"
 
 
 def test_bad_json_line_is_invalid_event(make_scenario, tmp_path):

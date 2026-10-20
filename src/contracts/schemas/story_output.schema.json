@@ -10,6 +10,7 @@
     },
     "PersonaText": {
       "additionalProperties": false,
+      "description": "In StoryOutput: templates written by the model ({fact_key} placeholders, no\ndigits). In Insight: the same text rendered by code with fact values.",
       "properties": {
         "body": {
           "maxLength": 320,

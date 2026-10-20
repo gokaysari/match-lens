@@ -19,14 +19,6 @@
         "kind": {
           "$ref": "#/$defs/ClaimKind"
         },
-        "metric_refs": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/MetricRef"
-          },
-          "title": "Metric Refs",
-          "type": "array"
-        },
         "text": {
           "maxLength": 280,
           "minLength": 1,
@@ -50,41 +42,6 @@
       ],
       "title": "ClaimKind",
       "type": "string"
-    },
-    "MetricName": {
-      "enum": [
-        "passes_attempted",
-        "passes_completed",
-        "pass_completion",
-        "pressures",
-        "pressures_opp_half",
-        "ball_wins",
-        "high_ball_wins",
-        "shots",
-        "goals"
-      ],
-      "title": "MetricName",
-      "type": "string"
-    },
-    "MetricRef": {
-      "additionalProperties": false,
-      "description": "Points at one bundle metric by (name, team_id); the value is looked up by\ncode, never copied by the model.",
-      "properties": {
-        "name": {
-          "$ref": "#/$defs/MetricName"
-        },
-        "team_id": {
-          "minLength": 1,
-          "title": "Team Id",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "team_id"
-      ],
-      "title": "MetricRef",
-      "type": "object"
     }
   },
   "additionalProperties": false,

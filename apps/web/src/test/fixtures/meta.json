@@ -1,8 +1,6 @@
 {
   "schema_version": "1.0",
   "match_id": "synthetic-01",
-  "scenario_seed": 2026,
-  "title": "Northbridge FC v Harbour Athletic - Harbour counter-attack, period 2 (58:00-62:00)",
   "teams": [
     {
       "id": "nbr",
@@ -147,32 +145,6 @@
       "team_id": "hba",
       "name": "Arlo Penhale",
       "shirt_number": 11
-    }
-  ],
-  "moments": [
-    {
-      "key": "a",
-      "description": "Northbridge build up patiently with short passes in their own half; no threat.",
-      "first_event_id": "e001",
-      "last_event_id": "e023"
-    },
-    {
-      "key": "b",
-      "description": "Harbour press in Northbridge's half for 60 seconds; Northbridge pass completion drops.",
-      "first_event_id": "e024",
-      "last_event_id": "e062"
-    },
-    {
-      "key": "c",
-      "description": "Harbour win the ball high up the pitch and score within 10 seconds (0-1).",
-      "first_event_id": "e063",
-      "last_event_id": "e066"
-    },
-    {
-      "key": "d",
-      "description": "Northbridge respond with possession but only low-threat passes and one blocked shot.",
-      "first_event_id": "e067",
-      "last_event_id": "e097"
     }
   ],
   "initial_score": {

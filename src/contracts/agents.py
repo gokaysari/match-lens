@@ -11,8 +11,14 @@ Three LLM roles exchange typed, versioned artifacts (never a shared chat log):
 
 Every artifact carries `candidate_id` + `snapshot_id`; a role can only write its
 own artifact and can never change events, metrics or scores. Every model output
-is validated by code (schema, evidence IDs inside the bundle, numbers taken
-from the bundle's metrics) before the next step sees it.
+is validated by code before the next step sees it.
+
+Numbers: model-written text contains NO digits and no number words. Every number,
+score or time is a placeholder `{key}` naming a Fact of the bundle (code-computed
+value + its meaning); code renders the values into the published Insight. So a
+number can only appear with the meaning of the fact the model chose, the editor
+reviews exactly that choice, and the storyteller may only use facts that its
+approved claims use. Placeholder grammar: `{` + FACT_KEY_PATTERN + `}`.
 """
 
 from __future__ import annotations
@@ -26,6 +32,8 @@ from contracts.api import Card, MetricName, MetricValue
 from contracts.events import SCHEMA_VERSION, MatchEvent, SInt, SStr
 
 _FROZEN = ConfigDict(frozen=True, extra="forbid")
+
+FACT_KEY_PATTERN = r"[a-z0-9_]+(?:\.[a-z0-9_]+)*"  # e.g. pass_completion.nbr.pct, score, clock
 
 
 class Persona(StrEnum):
@@ -59,6 +67,16 @@ class MomentCandidate(BaseModel):
     synthetic: Literal[True] = True
 
 
+class Fact(BaseModel):
+    """One code-computed value an agent may quote, by key only."""
+
+    model_config = _FROZEN
+    key: str = Field(pattern=r"^" + FACT_KEY_PATTERN + r"$", max_length=64)
+    text: SStr  # rendered value as shown to users, e.g. "16", "60%", "6/10", "0-1", "59:52"
+    meaning: SStr  # plain description, e.g. "Harbour Athletic pressures in Northbridge FC's half, 58:52-59:52"
+    event_ids: tuple[str, ...] = ()  # events the value was computed from (may be empty, e.g. a clock)
+
+
 class EvidenceBundle(BaseModel):
     """Everything an agent may cite. Built by code from the snapshot; frozen."""
 
@@ -67,6 +85,7 @@ class EvidenceBundle(BaseModel):
     snapshot_id: SStr
     events: tuple[MatchEvent, ...]  # all with sequence <= watermark
     metrics: tuple[MetricValue, ...]  # window metrics at the watermark (metrics-v1)
+    facts: tuple[Fact, ...]  # the only values model text may quote, via {key}
     team_names: dict[str, str]  # team_id -> display name
     player_names: dict[str, str]  # player_id -> display name
 
@@ -79,28 +98,13 @@ class ClaimKind(StrEnum):
     interpretation = "interpretation"  # a football reading of observations; hedged
 
 
-class MetricRef(BaseModel):
-    """Points at one bundle metric by (name, team_id); the value is looked up by
-    code, never copied by the model."""
-
-    model_config = _FROZEN
-    name: MetricName
-    team_id: SStr
-
-
 class Claim(BaseModel):
     model_config = _FROZEN
     claim_id: SStr  # unique within one AnalystOutput, e.g. "c1"
     kind: ClaimKind
+    # template: no digits / number words; values only as {fact_key} of the bundle
     text: str = Field(min_length=1, max_length=280)
     evidence_event_ids: tuple[str, ...] = Field(min_length=1)
-    # metrics whose values the text quotes; every bare number in `text` must be
-    # one of their values (value, numerator, denominator, ratio as whole percent)
-    # or a number of the source card; times only as mm:ss of a cited event or the
-    # card. LIMITATION: code proves each number comes from deterministic data, not
-    # that it is used with the same meaning ("60 pressures" reusing a "60 s"
-    # window passes); that semantic check is the Evidence Editor's job.
-    metric_refs: tuple[MetricRef, ...] = ()
 
 
 class AnalystOutput(BaseModel):
@@ -140,6 +144,9 @@ class EditorReview(BaseModel):
 
 
 class PersonaText(BaseModel):
+    """In StoryOutput: templates written by the model ({fact_key} placeholders, no
+    digits). In Insight: the same text rendered by code with fact values."""
+
     model_config = _FROZEN
     persona: Persona
     language: Literal["en"] = "en"
@@ -176,10 +183,22 @@ class TraceStep(BaseModel):
     detail: str | None = None  # validation codes / error class; never secrets or prompts
 
 
-class Outcome(StrEnum):
+class InsightOutcome(StrEnum):
     published = "published"  # agent text passed every check
     fallback = "fallback"  # template text from source_card shown instead
     abstained = "abstained"  # analyst found nothing supportable; template shown
+
+
+class PublishedClaim(BaseModel):
+    """An approved claim as shown to users: `text` rendered, `template` as reviewed."""
+
+    model_config = _FROZEN
+    claim_id: SStr
+    kind: ClaimKind
+    text: SStr
+    template: SStr
+    evidence_event_ids: tuple[str, ...]
+    fact_keys: tuple[str, ...]  # facts the template quotes
 
 
 class Insight(BaseModel):
@@ -194,9 +213,10 @@ class Insight(BaseModel):
     trigger_seq: SInt
     trigger_clock_ms: SInt
     expires_at_ms: SInt
-    outcome: Outcome
+    outcome: InsightOutcome
     variants: tuple[PersonaText, ...]  # one per Persona
-    claims: tuple[Claim, ...]  # approved claims behind the variants (empty on fallback)
+    claims: tuple[PublishedClaim, ...]  # approved claims behind the variants (empty on fallback)
+    facts: tuple[Fact, ...]  # every fact the published text quotes (empty on fallback)
     evidence_event_ids: tuple[str, ...]  # union of cited events (source_card's on fallback)
     model_id: str | None = None  # deployment name used; None for fallback-only runs
     prompt_version: SStr
@@ -208,7 +228,7 @@ class Insight(BaseModel):
             raise ValueError("exactly one variant per persona")
         claim_ids = {c.claim_id for c in self.claims}
         for v in self.variants:
-            if self.outcome is Outcome.published:
+            if self.outcome is InsightOutcome.published:
                 if not v.claim_ids or not set(v.claim_ids) <= claim_ids:
                     raise ValueError("published variants must cite published claims")
             elif v.claim_ids or self.claims:
@@ -222,5 +242,5 @@ class RunTrace(BaseModel):
     candidate_id: SStr
     snapshot_id: SStr
     steps: tuple[TraceStep, ...]
-    outcome: Outcome
+    outcome: InsightOutcome
     total_latency_ms: SInt

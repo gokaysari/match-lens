@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "Player": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "shirt_number": {
+          "maximum": 99,
+          "minimum": 1,
+          "title": "Shirt Number",
+          "type": "integer"
+        },
+        "team_id": {
+          "minLength": 1,
+          "title": "Team Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "team_id",
+        "name",
+        "shirt_number"
+      ],
+      "title": "Player",
+      "type": "object"
+    },
+    "Score": {
+      "additionalProperties": false,
+      "properties": {
+        "away": {
+          "minimum": 0,
+          "title": "Away",
+          "type": "integer"
+        },
+        "home": {
+          "minimum": 0,
+          "title": "Home",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "home",
+        "away"
+      ],
+      "title": "Score",
+      "type": "object"
+    },
+    "Team": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "home",
+            "away"
+          ],
+          "title": "Side",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "side"
+      ],
+      "title": "Team",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What a client may know before the replay starts. ScenarioMeta's `moments`\nand `title` describe the scripted future (test oracle) and are never served.",
+  "properties": {
+    "initial_score": {
+      "$ref": "#/$defs/Score"
+    },
+    "match_id": {
+      "minLength": 1,
+      "title": "Match Id",
+      "type": "string"
+    },
+    "players": {
+      "items": {
+        "$ref": "#/$defs/Player"
+      },
+      "title": "Players",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "segment_end_ms": {
+      "title": "Segment End Ms",
+      "type": "integer"
+    },
+    "segment_start_ms": {
+      "title": "Segment Start Ms",
+      "type": "integer"
+    },
+    "synthetic": {
+      "const": true,
+      "default": true,
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "teams": {
+      "items": {
+        "$ref": "#/$defs/Team"
+      },
+      "title": "Teams",
+      "type": "array"
+    }
+  },
+  "required": [
+    "match_id",
+    "teams",
+    "players",
+    "initial_score",
+    "segment_start_ms",
+    "segment_end_ms"
+  ],
+  "title": "MatchInfo",
+  "type": "object"
+}

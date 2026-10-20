@@ -77,16 +77,19 @@ describe("replay controls", () => {
     await waitFor(() => expect(api.forEndpoint("snapshot").at(-1)!.url.searchParams.get("at_seq")).toBe("2001"));
   });
 
-  it("aborts the in-flight request when the watermark changes", async () => {
+  it("keeps the in-flight request when stepping forward and aborts it when scrubbing below its at_seq", async () => {
     const user = userEvent.setup();
     const api = await renderApp({
       override: (endpoint, seq, call) => (endpoint === "snapshot" && seq === 2001 ? hang(call) : undefined),
     });
     await waitFor(() => expect(api.forEndpoint("snapshot").length).toBe(1));
     const first = api.forEndpoint("snapshot")[0]!;
-    expect(first.signal!.aborted).toBe(false);
     await user.click(screen.getByRole("button", { name: "Step forward" }));
-    await waitFor(() => expect(first.signal!.aborted).toBe(true));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(first.signal!.aborted).toBe(false);
+    expect(api.forEndpoint("snapshot")).toHaveLength(1);
+    goTo(2001); // back to the first event: at_seq 2001 is not below 2001, still in flight
+    expect(first.signal!.aborted).toBe(false);
   });
 
   it("debounces rapid watermark changes into one request burst", async () => {
@@ -146,7 +149,7 @@ describe("cards", () => {
     const c = await screen.findByRole("article", { name: goalCard.title });
     expect(within(c).getByText(/<b>not html<\/b>/)).toBeInTheDocument();
     expect(c.querySelector("b")).toBeNull();
-    expect(within(c).getByText(/^at \d\d:\d\d$/)).toBeInTheDocument();
+    expect(within(c).getByText(/^as of \d\d:\d\d$/)).toBeInTheDocument();
   });
 
   it("evidence disclosure lists the evidence event ids with time, team, type and player", async () => {
@@ -162,7 +165,7 @@ describe("cards", () => {
     const stamp = `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
     expect(within(c).getByText(new RegExp(`^e029 · ${stamp} · .+ · ${e029.type} · ${meta.players.find((p) => p.id === e029.player_id)!.name}$`))).toBeVisible();
     expect(within(c).getByText(/^e030 ·/)).toBeInTheDocument();
-    expect(within(c).getByText(/goals · Harbour Athletic · 1/)).toBeInTheDocument();
+    expect(within(c).getByText(/Goals · Harbour Athletic · 1/)).toBeInTheDocument();
   });
 });
 

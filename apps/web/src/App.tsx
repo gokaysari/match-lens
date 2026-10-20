@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getEvents, getMeta } from "./api/client";
-import type { MatchEvent, ScenarioMeta } from "./api/types";
-import { CardsPanel } from "./components/CardsPanel";
+import type { Card, MatchEvent, MatchInfo, Score } from "./api/types";
+import { CardsPanel, visibleCards } from "./components/CardsPanel";
 import { Controls } from "./components/Controls";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { Pitch } from "./components/Pitch";
 import { seqOfSnapshotId, useAnalysis, useReplay } from "./hooks";
 import { NO_VALUE, mmss } from "./lib/format";
 
-type Loaded = { meta: ScenarioMeta; events: MatchEvent[] };
+type Loaded = { meta: MatchInfo; events: MatchEvent[] };
 type Load =
   | { state: "loading" }
   | { state: "error"; message: string }
@@ -36,6 +36,9 @@ export default function App({ matchId = "synthetic-01" }: { matchId?: string }) 
     Promise.all([getMeta(matchId, ctl.signal), getEvents(matchId, ctl.signal)])
       .then(([meta, page]) => {
         if (page.events.length === 0) throw new Error("The match has no events.");
+        if (!meta.teams.some((t) => t.side === "home") || !meta.teams.some((t) => t.side === "away")) {
+          throw new Error("The match info is missing a home and away team.");
+        }
         setLoad({ state: "ready", meta, events: page.events });
       })
       .catch((err: unknown) => {
@@ -60,6 +63,34 @@ export default function App({ matchId = "synthetic-01" }: { matchId?: string }) 
   );
 }
 
+/**
+ * Text for a separate polite live region: titles of cards not announced before (deduped by
+ * card_id) and score changes. Stays unchanged on steps that bring neither.
+ */
+function usePoliteAnnouncement(shown: Card[], score: Score | undefined): string {
+  const [text, setText] = useState("");
+  const seenCards = useRef(new Set<string>());
+  const lastScore = useRef<string | null>(null);
+  const key = score ? `${score.home}-${score.away}` : null;
+  const ids = shown.map((c) => c.card_id).join("|");
+  useEffect(() => {
+    const parts: string[] = [];
+    for (const c of shown) {
+      if (!seenCards.current.has(c.card_id)) {
+        seenCards.current.add(c.card_id);
+        parts.push(`New card: ${c.title}`);
+      }
+    }
+    if (score && key !== lastScore.current) {
+      if (lastScore.current !== null) parts.push(`Score is now ${score.home} to ${score.away}`);
+      lastScore.current = key;
+    }
+    if (parts.length) setText(parts.join(". "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids, key]);
+  return text;
+}
+
 function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
   const replay = useReplay(events);
   const current = events[replay.index]!;
@@ -76,21 +107,23 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
   const score = snapshot?.score;
   const announcement =
     analysis.settled === "unavailable" ? "Analysis unavailable" : analysis.recovered ? "Analysis restored" : "";
-  const metricsEvent = metrics
-    ? events.find((e) => e.sequence === seqOfSnapshotId(metrics.snapshot_id))
-    : undefined;
-  const periodStart = metricsEvent && events.find((e) => e.period === metricsEvent.period);
-  const sincePeriodStart =
-    !!metricsEvent && !!periodStart && metricsEvent.event_time_ms - periodStart.event_time_ms < 60000;
+  // Shown analysis that is behind the watermark is dimmed and labelled with its own clock.
+  const scoreStale = !!snapshot && snapshot.watermark_seq < current.sequence;
+  const metricsSeq = metrics ? seqOfSnapshotId(metrics.snapshot_id) : NaN;
+  const metricsStale = !!metrics && metricsSeq < current.sequence;
+  const metricsAsOf = metricsStale ? (events.find((e) => e.sequence === metricsSeq)?.event_time_ms ?? metrics.window_end_ms) : null;
+  const shownCards = visibleCards(analysis.cards, current.sequence, current.event_time_ms);
+  const polite = usePoliteAnnouncement(shownCards, score);
 
   return (
     <main>
       <section className="scorebar" aria-label="Score">
         <span className="team home">{home.name}</span>
-        <span className="score">
+        <span className={scoreStale ? "score stale" : "score"}>
           <span aria-label="Home score">{score ? score.home : NO_VALUE}</span>
           <span aria-hidden="true"> – </span>
           <span aria-label="Away score">{score ? score.away : NO_VALUE}</span>
+          {scoreStale && <span className="asof">{`as of ${mmss(snapshot.clock_ms)}`}</span>}
         </span>
         <span className="team away">{away.name}</span>
         <span className="clock">
@@ -101,6 +134,7 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
         <p role="status" className="analysis-status" data-state={analysis.status}>
           {announcement}
         </p>
+        <div data-testid="announcer" className="sr-only" aria-live="polite">{polite}</div>
         <span className="analysis-status" aria-hidden="true">
           {analysis.status === "loading" ? "Updating…" : ""}
         </span>
@@ -127,7 +161,7 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
             watermarkSeq={current.sequence}
             clockMs={current.event_time_ms}
           />
-          <MetricsPanel metrics={metrics} meta={meta} sincePeriodStart={sincePeriodStart} />
+          <MetricsPanel metrics={metrics} meta={meta} staleAsOfMs={metricsAsOf} />
         </div>
       </div>
       <p className="muted small footer">

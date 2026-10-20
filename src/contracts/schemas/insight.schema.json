@@ -1,48 +1,5 @@
 {
   "$defs": {
-    "Claim": {
-      "additionalProperties": false,
-      "properties": {
-        "claim_id": {
-          "minLength": 1,
-          "title": "Claim Id",
-          "type": "string"
-        },
-        "evidence_event_ids": {
-          "items": {
-            "type": "string"
-          },
-          "minItems": 1,
-          "title": "Evidence Event Ids",
-          "type": "array"
-        },
-        "kind": {
-          "$ref": "#/$defs/ClaimKind"
-        },
-        "metric_refs": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/MetricRef"
-          },
-          "title": "Metric Refs",
-          "type": "array"
-        },
-        "text": {
-          "maxLength": 280,
-          "minLength": 1,
-          "title": "Text",
-          "type": "string"
-        }
-      },
-      "required": [
-        "claim_id",
-        "kind",
-        "text",
-        "evidence_event_ids"
-      ],
-      "title": "Claim",
-      "type": "object"
-    },
     "ClaimKind": {
       "enum": [
         "observation",
@@ -51,48 +8,50 @@
       "title": "ClaimKind",
       "type": "string"
     },
-    "MetricName": {
-      "enum": [
-        "passes_attempted",
-        "passes_completed",
-        "pass_completion",
-        "pressures",
-        "pressures_opp_half",
-        "ball_wins",
-        "high_ball_wins",
-        "shots",
-        "goals"
-      ],
-      "title": "MetricName",
-      "type": "string"
-    },
-    "MetricRef": {
+    "Fact": {
       "additionalProperties": false,
-      "description": "Points at one bundle metric by (name, team_id); the value is looked up by\ncode, never copied by the model.",
+      "description": "One code-computed value an agent may quote, by key only.",
       "properties": {
-        "name": {
-          "$ref": "#/$defs/MetricName"
+        "event_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
         },
-        "team_id": {
+        "key": {
+          "maxLength": 64,
+          "pattern": "^[a-z0-9_]+(?:\\.[a-z0-9_]+)*$",
+          "title": "Key",
+          "type": "string"
+        },
+        "meaning": {
           "minLength": 1,
-          "title": "Team Id",
+          "title": "Meaning",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
           "type": "string"
         }
       },
       "required": [
-        "name",
-        "team_id"
+        "key",
+        "text",
+        "meaning"
       ],
-      "title": "MetricRef",
+      "title": "Fact",
       "type": "object"
     },
-    "Outcome": {
+    "InsightOutcome": {
       "enum": [
         "published",
         "fallback",
         "abstained"
       ],
-      "title": "Outcome",
+      "title": "InsightOutcome",
       "type": "string"
     },
     "Persona": {
@@ -105,6 +64,7 @@
     },
     "PersonaText": {
       "additionalProperties": false,
+      "description": "In StoryOutput: templates written by the model ({fact_key} placeholders, no\ndigits). In Insight: the same text rendered by code with fact values.",
       "properties": {
         "body": {
           "maxLength": 320,
@@ -143,6 +103,54 @@
       ],
       "title": "PersonaText",
       "type": "object"
+    },
+    "PublishedClaim": {
+      "additionalProperties": false,
+      "description": "An approved claim as shown to users: `text` rendered, `template` as reviewed.",
+      "properties": {
+        "claim_id": {
+          "minLength": 1,
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "evidence_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Event Ids",
+          "type": "array"
+        },
+        "fact_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fact Keys",
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ClaimKind"
+        },
+        "template": {
+          "minLength": 1,
+          "title": "Template",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "kind",
+        "text",
+        "template",
+        "evidence_event_ids",
+        "fact_keys"
+      ],
+      "title": "PublishedClaim",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -150,7 +158,7 @@
   "properties": {
     "claims": {
       "items": {
-        "$ref": "#/$defs/Claim"
+        "$ref": "#/$defs/PublishedClaim"
       },
       "title": "Claims",
       "type": "array"
@@ -165,6 +173,13 @@
     "expires_at_ms": {
       "title": "Expires At Ms",
       "type": "integer"
+    },
+    "facts": {
+      "items": {
+        "$ref": "#/$defs/Fact"
+      },
+      "title": "Facts",
+      "type": "array"
     },
     "insight_id": {
       "minLength": 1,
@@ -189,7 +204,7 @@
       "title": "Model Id"
     },
     "outcome": {
-      "$ref": "#/$defs/Outcome"
+      "$ref": "#/$defs/InsightOutcome"
     },
     "prompt_version": {
       "minLength": 1,
@@ -239,6 +254,7 @@
     "outcome",
     "variants",
     "claims",
+    "facts",
     "evidence_event_ids",
     "prompt_version"
   ],

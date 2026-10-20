@@ -10,7 +10,7 @@ from pathlib import Path
 from agents.single_output import SingleAgentOutput
 from contracts.agents import AnalystOutput, EditorReview, Role, StoryOutput
 
-PROMPT_VERSION = "p2"
+PROMPT_VERSION = "p3"
 
 _DIR = Path(__file__).parent
 _FILES = {
@@ -31,8 +31,19 @@ def _output_model(role: Role):
     return SingleAgentOutput
 
 
+_NUMBERS_ROLES = frozenset({Role.analyst, Role.storyteller, Role.single})  # roles that write text
+
+
+def _read(name: str) -> str:
+    return (_DIR / name).read_text(encoding="utf-8").rstrip()
+
+
 @lru_cache(maxsize=None)
 def load_prompt(role: Role) -> str:
-    text = (_DIR / _FILES[role]).read_text(encoding="utf-8").rstrip()
+    parts = [_read(_FILES[role])]
+    if role in _NUMBERS_ROLES:
+        parts.append(_read("_numbers.md"))
+    parts.append(_read("_rules.md"))
+    text = "\n\n".join(parts)
     schema = json.dumps(_output_model(role).model_json_schema(), sort_keys=True, indent=1)
     return f"{text}\n\n## Output JSON Schema\n\n```json\n{schema}\n```\n"

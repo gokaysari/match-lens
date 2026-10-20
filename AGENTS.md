@@ -12,6 +12,7 @@ Hackathon entry: Microsoft Premier League "Inside the Game". Deadline 2026-10-28
 - No secrets in the repo, prompts, traces or test output.
 - The repo will be public: never commit personal data, private links (chat shares, docs), verbatim third-party content (e.g. the official rules) or raw outputs fetched from remote services. Keep such files local and gitignored.
 - Stage files explicitly by path; never `git add -A` / `git add .` / `git commit -a` without reading what gets added.
+- Commit messages carry no AI/tool attribution: no `Co-Authored-By` trailers, no "Generated with" lines. Two humans own this project.
 
 ## Engineering rules
 
@@ -28,7 +29,7 @@ The main session is the lead developer: it plans, splits work into small tasks w
 
 | Agent | Owns |
 |---|---|
-| `backend-engineer` | `services/api`, `src/domain`, `src/contracts`, `scenarios`, the football tools (incl. `mcp-tests/`) |
+| `backend-engineer` | `services/api`, `src/domain`, `src/agents`, `src/workflow`, `scenarios`, `evals`, `mcp-tests/` (contracts in `src/contracts` are lead-owned) |
 | `frontend-engineer` | `apps/web` |
 | `e2e-tester` | browser tests for user flows |
 | `reviewer` | read-only review of a finished task's diff |
