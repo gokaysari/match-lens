@@ -38,6 +38,8 @@ export type AnalysisStatus = "loading" | "ready" | "unavailable";
 export const THROTTLE_MS = 200;
 /** A request that has not answered by then is abandoned so later positions can still be fetched. */
 export const REQUEST_TIMEOUT_MS = 5000;
+/** Delay before the single retry of a timed-out request for the current watermark. */
+export const RETRY_DELAY_MS = 1000;
 
 /** Seq encoded in a snapshot_id "<match>@<seq>"; NaN when malformed. */
 export function seqOfSnapshotId(id: string): number {
@@ -70,6 +72,7 @@ export function useAnalysis(matchId: string, seq: number) {
   const lastAt = useRef<number | null>(null); // at_seq of the most recently issued request
   const lastIssuedTime = useRef(-Infinity);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retriedAt = useRef<number | null>(null); // watermark already retried after a timeout
 
   const pump = useCallback(() => {
     if (timer.current) {
@@ -81,6 +84,7 @@ export function useAnalysis(matchId: string, seq: number) {
       if (latest.current >= cur.at) return; // still useful: its completion will chain
       cur.ctl.abort(); // scrubbed back below it
       inflight.current = null;
+      lastAt.current = null; // the aborted watermark was never answered; it must be requestable again
     }
     if (lastAt.current === latest.current) return; // already requested for this watermark
     const wait = lastIssuedTime.current + THROTTLE_MS - Date.now();
@@ -110,12 +114,22 @@ export function useAnalysis(matchId: string, seq: number) {
       // Superseded, scrubbed away or unmounted (also StrictMode cleanup): not an outage.
       if (inflight.current !== req || (ctl.signal.aborted && !req.timedOut)) return;
       inflight.current = null;
+      if (req.timedOut) {
+        if (at < latest.current) lastAt.current = null;
+        else if (at === latest.current && retriedAt.current !== at) {
+          retriedAt.current = at;
+          lastAt.current = null;
+          timer.current = setTimeout(pump, RETRY_DELAY_MS); // retry once, shortly
+          lastIssuedTime.current = Date.now();
+        }
+      }
       if (at <= latest.current) {
         const sv = valid(s), mv = valid(m), kv = valid(k);
         if (sv) setSnapshot(sv);
         if (mv) setMetrics(mv);
         if (kv) setCards(kv.cards);
         const ok = !!(sv && mv && kv);
+        if (ok) retriedAt.current = null;
         if (!ok) {
           wasUnavailable.current = true;
           setRecovered(false);
@@ -128,8 +142,28 @@ export function useAnalysis(matchId: string, seq: number) {
         setSettled(ok ? "ready" : "unavailable");
         setStatus(at === latest.current ? (ok ? "ready" : "unavailable") : "loading");
       }
-      pump();
+      if (!timer.current) pump();
     });
+  }, [matchId]);
+
+  // New match: drop everything belonging to the previous one.
+  useEffect(() => {
+    setSnapshot(null);
+    setMetrics(null);
+    setCards([]);
+    setStatus("loading");
+    setSettled(null);
+    setRecovered(false);
+    wasUnavailable.current = false;
+    retriedAt.current = null;
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      inflight.current?.ctl.abort();
+      inflight.current = null;
+      lastAt.current = null;
+      lastIssuedTime.current = -Infinity;
+    };
   }, [matchId]);
 
   useEffect(() => {
@@ -137,18 +171,6 @@ export function useAnalysis(matchId: string, seq: number) {
     setStatus("loading");
     pump();
   }, [matchId, seq, pump]);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = null;
-      inflight.current?.ctl.abort();
-      inflight.current = null;
-      lastAt.current = null;
-      lastIssuedTime.current = -Infinity;
-    },
-    [],
-  );
 
   return { snapshot, metrics, cards, status, settled, recovered };
 }

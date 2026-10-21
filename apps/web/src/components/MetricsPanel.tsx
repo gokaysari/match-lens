@@ -3,9 +3,15 @@ import { NO_VALUE, formatMetric, metricLabel, mmss } from "../lib/format";
 
 export const NOT_REPORTED = "not reported";
 
-/** Visible caption: the window may start before the replay segment (no earlier data exists). */
-export function metricsCaption(windowStartMs: number, segmentStartMs: number): string {
-  return windowStartMs < segmentStartMs ? `Since ${mmss(segmentStartMs)} (replay start)` : "Last 60 s";
+const PERIOD_2_START_MS = 45 * 60000;
+
+/** Visible caption: the window may start before the replay segment or before the period start. */
+export function metricsCaption(windowStartMs: number, segmentStartMs: number, period: 1 | 2 = 1): string {
+  if (windowStartMs < segmentStartMs) return `Last 60 s · since ${mmss(segmentStartMs)} (replay start)`;
+  if (period === 2 && windowStartMs < PERIOD_2_START_MS) {
+    return `Last 60 s · since ${mmss(PERIOD_2_START_MS)} (period start)`;
+  }
+  return "Last 60 s";
 }
 
 interface Props {
@@ -13,9 +19,11 @@ interface Props {
   meta: MatchInfo;
   /** Clock of the shown metrics when they are behind the watermark; null when current. */
   staleAsOfMs: number | null;
+  /** Period of the metrics' watermark. */
+  period?: 1 | 2;
 }
 
-export function MetricsPanel({ metrics, meta, staleAsOfMs }: Props) {
+export function MetricsPanel({ metrics, meta, staleAsOfMs, period = 1 }: Props) {
   if (!metrics) {
     return (
       <section className="panel" aria-labelledby="metrics-h">
@@ -27,11 +35,12 @@ export function MetricsPanel({ metrics, meta, staleAsOfMs }: Props) {
   const names = [...new Set(metrics.metrics.map((m) => m.name))];
   const stale = staleAsOfMs !== null;
   return (
-    <section className={stale ? "panel stale" : "panel"} aria-labelledby="metrics-h">
+    <section className="panel" aria-labelledby="metrics-h">
       <h2 id="metrics-h">Metrics</h2>
       {stale && <p className="asof small">{`as of ${mmss(staleAsOfMs)}`}</p>}
-      <table aria-label="Last 60 s">
-        <caption>{metricsCaption(metrics.window_start_ms, meta.segment_start_ms)}</caption>
+      <div className={stale ? "stale-value" : undefined}>
+      <table>
+        <caption>{metricsCaption(metrics.window_start_ms, meta.segment_start_ms, period)}</caption>
         <thead>
           <tr>
             <th scope="col">Metric</th>
@@ -56,6 +65,7 @@ export function MetricsPanel({ metrics, meta, staleAsOfMs }: Props) {
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

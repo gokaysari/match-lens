@@ -112,6 +112,7 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
   const metricsSeq = metrics ? seqOfSnapshotId(metrics.snapshot_id) : NaN;
   const metricsStale = !!metrics && metricsSeq < current.sequence;
   const metricsAsOf = metricsStale ? (events.find((e) => e.sequence === metricsSeq)?.event_time_ms ?? metrics.window_end_ms) : null;
+  const metricsPeriod = events.find((e) => e.sequence === metricsSeq)?.period ?? current.period;
   const shownCards = visibleCards(analysis.cards, current.sequence, current.event_time_ms);
   const polite = usePoliteAnnouncement(shownCards, score);
 
@@ -119,10 +120,12 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
     <main>
       <section className="scorebar" aria-label="Score">
         <span className="team home">{home.name}</span>
-        <span className={scoreStale ? "score stale" : "score"}>
-          <span aria-label="Home score">{score ? score.home : NO_VALUE}</span>
-          <span aria-hidden="true"> – </span>
-          <span aria-label="Away score">{score ? score.away : NO_VALUE}</span>
+        <span className="score">
+          <span className={scoreStale ? "stale-value" : undefined}>
+            <span aria-label="Home score">{score ? score.home : NO_VALUE}</span>
+            <span aria-hidden="true"> – </span>
+            <span aria-label="Away score">{score ? score.away : NO_VALUE}</span>
+          </span>
           {scoreStale && <span className="asof">{`as of ${mmss(snapshot.clock_ms)}`}</span>}
         </span>
         <span className="team away">{away.name}</span>
@@ -161,7 +164,7 @@ function Replay({ matchId, meta, events }: { matchId: string } & Loaded) {
             watermarkSeq={current.sequence}
             clockMs={current.event_time_ms}
           />
-          <MetricsPanel metrics={metrics} meta={meta} staleAsOfMs={metricsAsOf} />
+          <MetricsPanel metrics={metrics} meta={meta} staleAsOfMs={metricsAsOf} period={metricsPeriod} />
         </div>
       </div>
       <p className="muted small footer">

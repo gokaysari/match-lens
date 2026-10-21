@@ -138,7 +138,7 @@ describe("metric labels and copy", () => {
         return jsonResponse(m);
       },
     });
-    const table = await screen.findByRole("table", { name: "Last 60 s" });
+    const table = await screen.findByRole("table", { name: /^Last 60 s/ });
     expect(within(table).getByText("not reported")).toBeInTheDocument();
     expect(within(table).getByText("–")).toHaveAttribute("title", "no attempts");
   });
@@ -155,10 +155,10 @@ describe("staleness", () => {
     expect(within(bar).queryByText(/^as of/)).toBeNull();
     goTo(2010);
     expect(within(bar).getByText("as of 58:00")).toBeInTheDocument();
-    expect(bar.querySelector(".score")).toHaveClass("stale");
+    expect(bar.querySelector(".score .stale-value")).not.toBeNull();
     const metrics = screen.getByRole("region", { name: "Metrics" });
     expect(within(metrics).getByText("as of 58:00")).toBeInTheDocument();
-    expect(metrics).toHaveClass("stale");
+    expect(metrics.querySelector(".stale-value")).not.toBeNull();
   });
 });
 
