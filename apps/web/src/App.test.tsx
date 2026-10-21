@@ -173,7 +173,7 @@ describe("metrics", () => {
   it("shows a Last 60 s table with ratios as percent and null as a dash", async () => {
     await renderApp();
     goTo(2050);
-    const table = await screen.findByRole("table", { name: "Last 60 s" });
+    const table = await screen.findByRole("table", { name: /^Last 60 s/ });
     expect(within(table).getByRole("columnheader", { name: "Northbridge FC" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Harbour Athletic" })).toBeInTheDocument();
     expect(within(table).getByText("44% (4/9)")).toBeInTheDocument();

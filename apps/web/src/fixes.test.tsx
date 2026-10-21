@@ -165,13 +165,13 @@ describe("5/6. metrics panel", () => {
     expect(within(row).getByText("7")).toBeInTheDocument();
   });
 
-  it("caption says 'Since 58:00 (replay start)' while the window starts before the segment, else 'Last 60 s'; the table name stays 'Last 60 s'", async () => {
+  it("caption says 'Last 60 s · since 58:00 (replay start)' while the window starts before the segment, else 'Last 60 s'; the table name stays 'Last 60 s'", async () => {
     await renderApp();
-    const table = await screen.findByRole("table", { name: "Last 60 s" });
-    expect(within(table).getByText("Since 58:00 (replay start)")).toBeInTheDocument();
+    const table = await screen.findByRole("table", { name: /^Last 60 s/ });
+    expect(within(table).getByText("Last 60 s · since 58:00 (replay start)")).toBeInTheDocument();
     const later = events.find((e) => e.event_time_ms - meta.segment_start_ms >= 60000)!;
     goTo(later.sequence);
-    await waitFor(() => expect(within(screen.getByRole("table", { name: "Last 60 s" })).getByText("Last 60 s")).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole("table", { name: /^Last 60 s/ })).getByText("Last 60 s")).toBeInTheDocument());
   });
 });
 

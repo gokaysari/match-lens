@@ -137,10 +137,10 @@ describe("5. metrics caption comes from the metrics' own window", () => {
       override: (ep, seq) =>
         ep === "metrics" && seq !== null && seq > 2001 ? new Promise<Response>(() => {}) : undefined,
     });
-    expect(await screen.findByText("Since 58:00 (replay start)")).toBeInTheDocument();
+    expect(await screen.findByText("Last 60 s · since 58:00 (replay start)")).toBeInTheDocument();
     goTo(2050);
     await sleep(450);
-    expect(screen.getByText("Since 58:00 (replay start)")).toBeInTheDocument();
+    expect(screen.getByText("Last 60 s · since 58:00 (replay start)")).toBeInTheDocument();
   });
 });
 

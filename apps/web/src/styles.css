@@ -60,10 +60,9 @@ th[scope="row"], thead th:first-child { text-align: left; }
   .score { font-size: 1.6rem; }
 }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.stale { opacity: 0.6; }
-.asof { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.stale-value { opacity: 0.6; }
+.asof { display: block; font-size: 0.8rem; font-weight: 600; color: #374151; }
 .asof.small { margin: 0 0 4px; }
-.panel.stale .asof { opacity: 1; }
 @media (max-width: 480px) {
   .scorebar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 4px 8px; }
   .scorebar .team.home { text-align: right; }
