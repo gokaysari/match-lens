@@ -76,7 +76,6 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
   1. Gerçek yapay zekâ modeli yok (Microsoft Foundry bağlantısı bekleniyor) → çalışan üründe Microsoft teknolojisi yok.
   2. Agent içgörüleri ve analist/taraftar seçimi arayüzde görünmüyor.
   3. Dağıtım, video, İngilizce pitch yok.
-  4. Git geçmişi henüz public açılmaya hazır değil (bkz. §6).
 
 ## 5. Sırada ne var (ayrıntı: [TODO.md](../TODO.md))
 
@@ -91,7 +90,7 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 ## 6. Ekipten karar/bilgi bekleyenler
 
 - **Foundry erişimi:** Azure aboneliği, `az login`, proje endpoint'i ve model dağıtım adı (2. adımın ön şartı).
-- **GitHub hesabı ve gizli `noreply` e-postası:** push öncesi geçmiş yeniden yazılacak — kaldırılan dosyalar ve kişisel e-posta eski commit'lerden silinecek, commit mesajlarındaki araç ibareleri temizlenecek.
+- **Depo:** public `gokaysari/match-lens` (yalnız `main`). Takım arkadaşının yazma yetkisi için GitHub kullanıcı adı gerekiyor.
 - **Lisans sahibi adı:** `LICENSE` şu an tek kişinin adını taşıyor; ekip adı veya iki isim istenebilir.
 - **Temsilci:** teslimi kimin yapacağı.
 - **İş bölümü:** iki kişi arasında 2–7. adımların paylaşımı.

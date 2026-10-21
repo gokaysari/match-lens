@@ -55,7 +55,7 @@ Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar
 
 ## 7. Teslim (26–27 Ekim)
 
-- [ ] Geçmiş temizliği (`git filter-repo`, kurulmalı): kaldırılan yollar, e-posta → GitHub noreply, commit mesajlarındaki `Co-Authored-By` / araç ibareleri silinir; yalnız `main` push; worktree dallarını sil.
+- [x] Yayın: public depo `gokaysari/match-lens`; yalnız `main`, yerel geliştirme geçmişinden temizlenmiş bir kopyadan push edilir (yerel araç dosyaları, özel araştırma ve ham çıktılar hiç yayınlanmaz; yazar kimliği gokaysari999@gmail.com).
 - [ ] İngilizce: README (pitch, kurulum, test erişimi), `docs/` (mimari, değerlendirme sonuçları, sınırlamalar); bu dosya ya çevrilir ya da depodan çıkarılır.
 - [ ] < 2 dakikalık video (problem → replay + persona → kanıt zinciri → hata toparlama → ölçüm ve Microsoft stack).
 - [ ] Ölçülmemiş iddia yok ("real time", "hallucination-free" vb.); resmî Microsoft/Premier League ürünü izlenimi yok; sayı denetiminin sınırı belgelenir.
