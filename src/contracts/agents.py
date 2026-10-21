@@ -1,6 +1,7 @@
-"""Match Lens agent pipeline contract, schema_version 1.0.
+"""Match Lens agent pipeline contract, schema_version 2.0.
 
-Three LLM roles exchange typed, versioned artifacts (never a shared chat log):
+Three LLM roles (four steps: the Evidence Editor reviews claims and, later, the
+story) exchange typed, versioned artifacts (never a shared chat log):
 
   MomentCandidate + EvidenceBundle  (built by deterministic code)
       -> Tactical Analyst      -> AnalystOutput   (claims citing evidence)
