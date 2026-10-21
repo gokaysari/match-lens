@@ -8,15 +8,16 @@ from functools import lru_cache
 from pathlib import Path
 
 from agents.single_output import SingleAgentOutput
-from contracts.agents import AnalystOutput, EditorReview, Role, StoryOutput
+from contracts.agents import AnalystOutput, EditorReview, Role, StoryOutput, StoryReview
 
-PROMPT_VERSION = "p3"
+PROMPT_VERSION = "p4"
 
 _DIR = Path(__file__).parent
 _FILES = {
     Role.analyst: "tactical_analyst.md",
     Role.editor: "evidence_editor.md",
     Role.storyteller: "audience_storyteller.md",
+    Role.story_editor: "evidence_editor_story.md",
     Role.single: "single_agent_baseline.md",
 }
 
@@ -28,6 +29,8 @@ def _output_model(role: Role):
         return EditorReview
     if role == Role.storyteller:
         return StoryOutput
+    if role == Role.story_editor:
+        return StoryReview
     return SingleAgentOutput
 
 

@@ -97,12 +97,12 @@ def test_bad_placeholder(press, text):
 
 
 def test_unknown_fact(press):
-    assert "UNKNOWN_FACT:shots.invented" in one(press, "Harbour made {shots.invented} shots.")
+    assert "UNKNOWN_FACT:c1:shots.invented" in one(press, "Harbour made {shots.invented} shots.")
 
 
 def test_unknown_fact_prev_window_missing_for_this_moment(press):
     # the press moment has no previous window: prev.* keys do not exist
-    assert "UNKNOWN_FACT:prev.pressures.hba" in one(press, "Down from {prev.pressures.hba} pressures.")
+    assert "UNKNOWN_FACT:c1:prev.pressures.hba" in one(press, "Down from {prev.pressures.hba} pressures.")
 
 
 # ---------------------------------------------------------------- number words
@@ -113,13 +113,13 @@ def test_unknown_fact_prev_window_missing_for_this_moment(press):
     "third", "thirds", "quarter", "quarters", "tenth", "dozen", "couple", "handful", "zero", "nil", "once",
 ])
 def test_number_words_rejected(press, word):
-    assert f"NUMBER_WORD:{word.lower()}" in one(press, f"Harbour pressed {word} time.")
+    assert f"NUMBER_WORD:c1:{word.lower()}" in one(press, f"Harbour pressed {word} time.")
 
 
 @pytest.mark.parametrize("noun", ["goal", "pass", "shots", "chance", "pressure", "minute"])
 @pytest.mark.parametrize("word", ["one", "single"])
 def test_one_and_single_only_before_counted_nouns(press, word, noun):
-    assert f"NUMBER_WORD:{word}" in one(press, f"Harbour had {word} {noun}.")
+    assert f"NUMBER_WORD:c1:{word}" in one(press, f"Harbour had {word} {noun}.")
 
 
 def test_one_and_single_elsewhere_are_english(press):
@@ -156,13 +156,13 @@ def test_exempt_football_phrases(press, phrase):
 
 def test_exempt_phrase_does_not_hide_other_number_words(press):
     codes = one(press, "In the final third they had two shots.")
-    assert "NUMBER_WORD:two" in codes and "NUMBER_WORD:third" not in codes
-    assert "NUMBER_WORD:third" in one(press, "A third of the passes failed.")
-    assert "NUMBER_WORD:four" in one(press, "Harbour had four, not a back four.")
+    assert "NUMBER_WORD:c1:two" in codes and "NUMBER_WORD:c1:third" not in codes
+    assert "NUMBER_WORD:c1:third" in one(press, "A third of the passes failed.")
+    assert "NUMBER_WORD:c1:four" in one(press, "Harbour had four, not a back four.")
 
 
 def test_first_and_second_are_allowed(press):
-    assert one(press, "The first pressure came before the second pass.") == ()
+    assert one(press, "The first touch came before the second ball and the first half.") == ()
 
 
 # ---------------------------------------------------------------- structural analyst rules still hold
@@ -200,7 +200,7 @@ def test_story_digits_forbidden(press, body):
 
 
 def test_story_unknown_and_bad_placeholders(press):
-    assert "UNKNOWN_FACT:shots.invented" in story(press, [C1], analyst_body="They had {shots.invented}.")
+    assert "UNKNOWN_FACT:analyst:shots.invented" in story(press, [C1], analyst_body="They had {shots.invented}.")
     assert "BAD_PLACEHOLDER:analyst" in story(press, [C1], analyst_body="They had {Shots}.")
 
 
@@ -231,7 +231,7 @@ def test_casual_at_most_one_placeholder_over_title_and_body(press):
 
 
 def test_story_number_words_markup_identical(press):
-    assert "NUMBER_WORD:twice" in story(press, [C1], analyst_body="Twice as many pressures.")
+    assert "NUMBER_WORD:analyst:twice" in story(press, [C1], analyst_body="Twice as many pressures.")
     assert "MARKUP_FORBIDDEN:casual" in story(press, [C1], casual_body="a > b")
     assert "IDENTICAL_BODIES" in story(press, [C1], analyst_body="Same.", casual_body="Same.")
 
@@ -254,3 +254,94 @@ def test_render_replaces_each_placeholder(press):
     assert render("no placeholders", facts) == "no placeholders"
     with pytest.raises(KeyError):
         render("{nope}", facts)
+
+
+# ---------------------------------------------------------------- review round: number words
+
+
+def words(cb, text):
+    return [c for c in one(cb, text) if c.startswith("NUMBER_WORD:")]
+
+
+@pytest.mark.parametrize("text,word", [
+    ("They go one up.", "one"), ("A second goal arrived.", "second"), ("It was a brace.", "brace"),
+    ("A hat-trick of chances.", "hat-trick"), ("A hat trick of chances.", "hat-trick"),
+    ("Harbour had just one.", "one"), ("Only one, then more.", "one"),
+    ("Both goals came late.", "both"), ("They had no shots at all.", "no"),
+    ("The first shot missed.", "first"), ("One down and pressing.", "one"), ("One ahead now.", "one"),
+    ("Two passes.", "two"),
+])
+def test_reviewer_number_phrases_rejected(press, text, word):
+    assert f"NUMBER_WORD:c1:{word}" in words(press, text)
+
+
+@pytest.mark.parametrize("text", [
+    "The first half was open.", "A second ball dropped.", "A good first touch.", "No one escaped.",
+    "Both teams pressed.", "None at all, nobody settled.", "One of them long.", "He is the only one here.",
+])
+def test_reviewer_number_phrases_allowed(press, text):
+    assert words(press, text) == []
+
+
+@pytest.mark.parametrize("ordinal", ["first", "second"])
+@pytest.mark.parametrize("noun", ["goal", "goals", "card", "shot", "pass", "passes", "chance", "corner",
+                                  "save", "tackle", "press", "pressures", "minute"])
+def test_ordinal_before_counted_noun(press, ordinal, noun):
+    assert f"NUMBER_WORD:c1:{ordinal}" in words(press, f"Their {ordinal} {noun} came.")
+
+
+@pytest.mark.parametrize("noun", ["goals", "cards", "shots", "passes", "chances", "corners", "saves",
+                                  "tackles", "pressures", "minutes"])
+@pytest.mark.parametrize("word", ["both", "no"])
+def test_both_no_before_counted_noun(press, word, noun):
+    assert f"NUMBER_WORD:c1:{word}" in words(press, f"There were {word} {noun}.")
+
+
+# ---------------------------------------------------------------- review round: half
+
+
+@pytest.mark.parametrize("text", [
+    "Harbour pressed in their half.", "Harbour pressed in the opponents' half.",
+    "Play stayed in Harbour's half.", "Play stayed in Northbridge half.",
+    "Harbour won it in the attacking half.", "They pressed in the defensive half.",
+    "Harbour pressed in the other half.", "Play stayed in the opposing half of the pitch.",
+    "Most play was in half of the pitch they own.", "Pressed in his own half.", "Play in the home half.",
+])
+def test_pitch_half_phrases_pass(press, text):
+    assert words(press, text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "Harbour completed half of the passes.", "Harbour won half the passes.", "Down by half.",
+    "Harbour had a half.", "Half of their passes failed.",
+])
+def test_fraction_half_phrases_fail(press, text):
+    assert "NUMBER_WORD:c1:half" in words(press, text)
+
+
+# ---------------------------------------------------------------- review round: once
+
+
+@pytest.mark.parametrize("text", [
+    "Once Harbour won the ball, they attacked.", "Harbour attacked. Once they won it, they ran.",
+    "Harbour won it, once the press worked.", "The press worked at once.",
+])
+def test_once_as_conjunction_or_at_once_passes(press, text):
+    assert words(press, text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "Harbour won it once.", "Harbour scored once more.", "They pressed once a minute.",
+])
+def test_once_as_a_count_fails(press, text):
+    assert "NUMBER_WORD:c1:once" in words(press, text)
+
+
+# ---------------------------------------------------------------- review round: codes name the claim
+
+
+def test_codes_name_the_claim_without_cross_claim_dedupe(press):
+    codes = analyst(press, claim("Harbour pressed twice {nope.x}.", cid="c1"),
+                    claim("Harbour pressed twice {nope.x}.", cid="c2", kind=ClaimKind.interpretation))
+    assert {"NUMBER_WORD:c1:twice", "NUMBER_WORD:c2:twice", "UNKNOWN_FACT:c1:nope.x",
+            "UNKNOWN_FACT:c2:nope.x"} <= set(codes)

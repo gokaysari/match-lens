@@ -17,6 +17,7 @@ from domain.moment import events_in_window, period_start_ms, possession_summary,
 from domain.snapshot import score_after, visible_events
 
 WINDOW_S = 60
+PERIOD_START_MS = {1: 0, 2: 2_700_000}
 
 _COUNT_DESC = {
     MetricName.passes_attempted: "Passes attempted by {team}",
@@ -79,10 +80,12 @@ def build_facts(meta: ScenarioMeta, events: Sequence[MatchEvent], card: Card,
     teams = list(meta.teams)
     names = {t.id: t.name for t in teams}
     end = trigger.event_time_ms
-    start = end - WINDOW_S * 1000
+    nominal = PERIOD_START_MS.get(trigger.period, 0)
+    start = max(end - WINDOW_S * 1000, nominal, meta.segment_start_ms)  # never before the period/segment
+    window_s = end // 1000 - start // 1000  # seconds spanned by the shown range
     facts: list[Fact] = _window_facts("", "", teams, vis, trigger.period, start, end)
 
-    prev_start = start - WINDOW_S * 1000
+    prev_start = start - WINDOW_S * 1000  # only when a full previous window exists
     first = period_start_ms(vis, trigger.period)
     if first is not None and prev_start >= first:
         facts += _window_facts("prev.", "Previous window: ", teams, vis, trigger.period, prev_start, start)
@@ -101,13 +104,16 @@ def build_facts(meta: ScenarioMeta, events: Sequence[MatchEvent], card: Card,
                       event_ids=(trigger.event_id,)))
     facts.append(Fact(key="window", text=f"{fmt_clock(start)}-{fmt_clock(end)}",
                       meaning="Match clock range of the last window before this moment (mm:ss-mm:ss)"))
-    facts.append(Fact(key="window_s", text=str(WINDOW_S), meaning="Length of that window in seconds"))
+    facts.append(Fact(key="window_s", text=str(window_s), meaning="Length of that window in seconds"))
 
     by_id = {e.event_id: e for e in vis}
+    taken = {f.key for f in facts}
     for eid in card.evidence_event_ids:
         ev = by_id.get(eid)
-        if ev is not None:
-            facts.append(Fact(key=f"t.{_key_part(eid)}", text=fmt_clock(ev.event_time_ms),
+        key = f"t.{_key_part(eid)}"
+        if ev is not None and len(key) <= 64 and key not in taken:  # unique, valid keys only
+            taken.add(key)
+            facts.append(Fact(key=key, text=fmt_clock(ev.event_time_ms),
                               meaning=f"Match clock of event {eid} (mm:ss)", event_ids=(eid,)))
 
     poss = possession_summary(vis, trigger, {t.id: t.side for t in teams})

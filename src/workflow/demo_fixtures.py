@@ -49,7 +49,7 @@ _VARIANTS = {
 
 
 def hand_written(candidate: MomentCandidate, bundle: EvidenceBundle) -> dict[str, dict]:
-    """Valid analyst / editor / storyteller outputs (as dicts) for a synthetic-01 candidate."""
+    """Valid analyst / editor / storyteller / story-review outputs (as dicts) for a synthetic-01 candidate."""
     key = candidate.source_card.card_id
     ids = {"candidate_id": candidate.candidate_id, "snapshot_id": candidate.snapshot_id}
     claims = [dict(c) for c in _CLAIMS[key]]
@@ -63,4 +63,7 @@ def hand_written(candidate: MomentCandidate, bundle: EvidenceBundle) -> dict[str
             {"persona": "analyst", "title": at, "body": ab, "claim_ids": claim_ids},
             {"persona": "casual", "title": ct, "body": cb, "claim_ids": claim_ids},
         ]},
+        "story_review": {**ids, "reviews": [{"persona": p, "verdict": "approved",
+                                             "reason": "Restates only what the claims say."}
+                                            for p in ("analyst", "casual")]},
     }

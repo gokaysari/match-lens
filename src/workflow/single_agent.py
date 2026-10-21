@@ -1,5 +1,11 @@
-"""Single-agent baseline for evaluation: same inputs, same checks, same fallback rules, one
-repair round for check failures and the same total time budget as the pipeline."""
+"""Single-agent baseline for evaluation. What each path gets (this is what the evaluation compares):
+
+- pipeline (`workflow.coordinator`): editor review of the claims + one analyst repair round, then
+  editor review of the story + one storyteller repair round (up to 8 model calls, 4 on the happy path).
+- baseline (this module): one call producing analysis and story together, and one repair round of
+  that single output when the deterministic checks fail (up to 2 model calls). No editor review.
+- both: the same inputs, the same deterministic checks, the same template fallback and the same
+  60 s total budget."""
 
 from __future__ import annotations
 
@@ -33,7 +39,7 @@ def _check(out: SingleAgentOutput, candidate: MomentCandidate, bundle: EvidenceB
 
 async def run_single(
     candidate: MomentCandidate, bundle: EvidenceBundle, model: ModelClient, *,
-    timeout_s: float = 30, total_s: float = 45, now: Callable[[], float] = time.monotonic,
+    timeout_s: float = 30, total_s: float = 60, now: Callable[[], float] = time.monotonic,
 ) -> tuple[Insight, RunTrace]:
     """timeout_s limits one call; total_s is the budget for the call and its single repair.
     Never raises except asyncio.CancelledError (see run_moment)."""

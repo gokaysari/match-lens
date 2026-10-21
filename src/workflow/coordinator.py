@@ -1,5 +1,6 @@
-"""Deterministic coordinator: Analyst -> Editor -> Storyteller, one repair round in total,
-deterministic checks after every model step, template fallback on any failure."""
+"""Deterministic coordinator: Analyst -> Editor (claims) -> Storyteller -> Editor (story). One analyst
+repair round and one storyteller repair round, deterministic checks after every model step,
+template fallback on any failure (an unreviewed story is never published)."""
 
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ValidationError
 
-from agents.checks import check_analyst, check_review, check_story
+from agents.checks import check_analyst, check_review, check_story, check_story_review
 from agents.model import ModelClient
 from agents.render import fact_view, render, used_facts
 from contracts.agents import (
@@ -27,6 +28,7 @@ from contracts.agents import (
     RunTrace,
     StepStatus,
     StoryOutput,
+    StoryReview,
     Verdict,
 )
 from workflow.insight import BudgetExceeded, Recorder, fallback_result, published_result
@@ -37,7 +39,8 @@ class Timeouts:
     analyst_s: float = 20
     editor_s: float = 15
     storyteller_s: float = 15
-    total_s: float = 45
+    story_editor_s: float = 15
+    total_s: float = 60
 
 
 def dumps(obj) -> str:
@@ -158,13 +161,56 @@ async def _run(candidate, bundle, model, timeouts: Timeouts, rec: Recorder):
         "approved_claims": [{"claim_id": c.claim_id, "kind": c.kind.value, "text": c.text} for c in approved],
         "facts": fact_view(used_facts([c.text for c in approved], bundle.facts)),
     }
-    text = await rec.call(model, Role.storyteller, 1, dumps(story_payload), timeouts.storyteller_s)
-    if text is None:
-        return fail()
-    story = parse(StoryOutput, text)
-    codes = ("SCHEMA_INVALID",) if story is None else check_story(story, approved, candidate, bundle)
-    if codes:
-        rec.done(Role.storyteller, 1, StepStatus.invalid, codes)
-        return fail()
-    rec.done(Role.storyteller, 1, StepStatus.ok)
-    return published_result(candidate, bundle, rec, model, story, approved)
+    return await _story_phase(candidate, bundle, model, timeouts, rec, approved, story_payload)
+
+
+async def _story_phase(candidate, bundle, model, timeouts: Timeouts, rec: Recorder, approved, story_payload):
+    """Storyteller -> story checks -> Evidence Editor (story) review, with ONE storyteller repair
+    round for any check failure or rejection. A story is published only after the editor approved it."""
+    fail = lambda: fallback_result(candidate, rec, model)  # noqa: E731
+    payload, attempt, review_n = story_payload, 1, 0
+    while True:
+        text = await rec.call(model, Role.storyteller, attempt, dumps(payload), timeouts.storyteller_s)
+        if text is None:
+            return fail()
+        story = parse(StoryOutput, text)
+        codes = ("SCHEMA_INVALID",) if story is None else check_story(story, approved, candidate, bundle)
+        review, rtext = None, None
+        if not codes:
+            rec.done(Role.storyteller, attempt, StepStatus.ok)
+            review_n += 1
+            ed_payload = {
+                "candidate_id": candidate.candidate_id, "snapshot_id": candidate.snapshot_id,
+                "team_names": bundle.team_names,
+                "approved_claims": [{"claim_id": c.claim_id, "template": c.text,
+                                     "rendered": render(c.text, bundle.facts)} for c in approved],
+                "facts": story_payload["facts"],
+                "variants": [{"persona": v.persona.value, "claim_ids": list(v.claim_ids),
+                              "title_template": v.title, "body_template": v.body,
+                              "title": render(v.title, bundle.facts), "body": render(v.body, bundle.facts)}
+                             for v in story.variants],
+            }
+            rtext = await rec.call(model, Role.story_editor, review_n, dumps(ed_payload),
+                                   timeouts.story_editor_s)
+            if rtext is None:
+                return fail()
+            review = parse(StoryReview, rtext)
+            rcodes = ("SCHEMA_INVALID",) if review is None else check_story_review(review, story, candidate)
+            if rcodes:
+                rec.done(Role.story_editor, review_n, StepStatus.invalid, rcodes)
+                return fail()  # never publish an unreviewed story
+            rejected = [r.persona.value for r in review.reviews if r.verdict == Verdict.rejected]
+            if not rejected:
+                rec.done(Role.story_editor, review_n, StepStatus.ok)
+                return published_result(candidate, bundle, rec, model, story, approved)
+            rec.done(Role.story_editor, review_n, StepStatus.rejected, [f"STORY_REJECTED:{p}" for p in rejected])
+            codes = tuple(f"STORY_REJECTED:{p}" for p in rejected)
+        else:
+            rec.done(Role.storyteller, attempt, StepStatus.invalid, codes)
+        if attempt == 2:
+            return fail()
+        attempt = 2
+        repair = repair_request(codes, text, story)
+        if review is not None:
+            repair["review"] = review.model_dump(mode="json")
+        payload = {**story_payload, "repair": repair}
