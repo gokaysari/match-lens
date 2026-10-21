@@ -145,3 +145,46 @@ def test_no_fact_uses_an_event_after_the_trigger(synth, cards):
 def test_bundle_carries_the_facts(cards):
     for cand, bundle in cards.values():
         assert bundle.facts and {f.key for f in bundle.facts} >= {"score", "clock", "window"}
+
+
+# ---------------------------------------------------------------- review round: window clamp, clock keys
+
+
+def press_inputs(synth, cards):
+    meta, events = synth
+    cand, _ = cards["press_surge"]
+    return meta, [e for e in events if e.sequence <= cand.watermark_seq], cand.source_card, cand.watermark_seq
+
+
+def test_window_starts_no_earlier_than_the_period_start(synth, cards):
+    meta, evs, card, seq = press_inputs(synth, cards)
+    shift = 3_592_000 - 2_720_000  # trigger 20 s into period 2
+    evs = [e.model_copy(update={"event_time_ms": e.event_time_ms - shift}) for e in evs]
+    meta = meta.model_copy(update={"segment_start_ms": 2_600_000})
+    d = {f.key: f for f in build_facts(meta, evs, card, seq)}
+    assert d["window"].text == "45:00-45:20" and d["window_s"].text == "20"
+    assert d["pressures_opp_half.hba"].meaning.endswith("45:00-45:20 (count)")
+    assert "45:00-45:20" in d["pass_completion.nbr.frac"].meaning
+
+
+def test_window_starts_no_earlier_than_the_segment_start(synth, cards):
+    meta, evs, card, seq = press_inputs(synth, cards)
+    meta = meta.model_copy(update={"segment_start_ms": 3_560_000})  # 59:20
+    d = {f.key: f for f in build_facts(meta, evs, card, seq)}
+    assert d["window"].text == "59:20-59:52" and d["window_s"].text == "32"
+    assert d["pressures_opp_half.hba"].meaning.endswith("59:20-59:52 (count)")
+
+
+def test_clock_keys_are_unique_and_odd_ids_never_raise(synth, cards):
+    meta, evs, card, seq = press_inputs(synth, cards)
+    a, b, c = evs[-1], evs[-2], evs[-3]
+    long_id = "x" * 70
+    odd = [a.model_copy(update={"event_id": "x.1"}), b.model_copy(update={"event_id": "x_1"}),
+           c.model_copy(update={"event_id": long_id})]
+    evs = [e for e in evs if e.event_id not in {a.event_id, b.event_id, c.event_id}] + odd
+    card = card.model_copy(update={"evidence_event_ids": ("x.1", "x_1", long_id)})
+    got = build_facts(meta, evs, card, seq)
+    keys = [f.key for f in got]
+    assert len(keys) == len(set(keys))
+    assert [k for k in keys if k.startswith("t.")] == ["t.x_1"] and all(len(k) <= 64 for k in keys)
+    assert [f.event_ids for f in got if f.key == "t.x_1"] == [("x.1",)]  # first one wins

@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "Persona": {
+      "enum": [
+        "analyst",
+        "casual"
+      ],
+      "title": "Persona",
+      "type": "string"
+    },
+    "VariantReview": {
+      "additionalProperties": false,
+      "properties": {
+        "persona": {
+          "$ref": "#/$defs/Persona"
+        },
+        "reason": {
+          "maxLength": 280,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "verdict": {
+          "$ref": "#/$defs/Verdict"
+        }
+      },
+      "required": [
+        "persona",
+        "verdict",
+        "reason"
+      ],
+      "title": "VariantReview",
+      "type": "object"
+    },
+    "Verdict": {
+      "enum": [
+        "approved",
+        "rejected"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The Evidence Editor's check of the story: each variant may only restate what\nits approved claims say (same team, same window, same fact meaning, no new\ncauses, places or qualities). Reviews the rendered text against claims + facts.",
+  "properties": {
+    "candidate_id": {
+      "minLength": 1,
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "repair_hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repair Hint"
+    },
+    "reviews": {
+      "items": {
+        "$ref": "#/$defs/VariantReview"
+      },
+      "title": "Reviews",
+      "type": "array"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "title": "Snapshot Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "snapshot_id",
+    "reviews"
+  ],
+  "title": "StoryReview",
+  "type": "object"
+}

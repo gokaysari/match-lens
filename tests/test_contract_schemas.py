@@ -10,7 +10,7 @@ def test_committed_schemas_are_fresh():
         "snapshot.schema.json", "event_page.schema.json", "window_metrics.schema.json",
         "card_list.schema.json", "analyst_output.schema.json", "editor_review.schema.json",
         "story_output.schema.json", "insight.schema.json", "run_trace.schema.json",
-        "match_info.schema.json",
+        "match_info.schema.json", "story_review.schema.json",
     }
     for name, text in rendered.items():
         assert (SCHEMA_DIR / name).read_text() == text

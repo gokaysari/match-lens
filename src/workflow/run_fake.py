@@ -23,7 +23,8 @@ async def main() -> None:
         hw = hand_written(cand, bundle)
         model = FakeModelClient("fake", {Role.analyst: [json.dumps(hw["analyst"])],
                                          Role.editor: [json.dumps(hw["editor"])],
-                                         Role.storyteller: [json.dumps(hw["storyteller"])]})
+                                         Role.storyteller: [json.dumps(hw["storyteller"])],
+                                         Role.story_editor: [json.dumps(hw["story_review"])]})
         insight, _ = await run_moment(cand, bundle, model)
         titles = " | ".join(f"{v.persona.value}: {v.title}" for v in insight.variants)
         print(f"{insight.insight_id} {insight.outcome.value} {titles}")

@@ -53,7 +53,7 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def model_for(cand, bundle, *, analyst=None, editor=None, story=None, repair=None, model_id="fake"):
+def model_for(cand, bundle, *, analyst=None, editor=None, story=None, story_review=None, model_id="fake"):
     """Script a client. Each of analyst/editor/story is a list of items (dict -> JSON)."""
     hw = hand_written(cand, bundle)
 
@@ -65,6 +65,7 @@ def model_for(cand, bundle, *, analyst=None, editor=None, story=None, repair=Non
         (Role.analyst, analyst, [hw["analyst"]]),
         (Role.editor, editor, [hw["editor"]]),
         (Role.storyteller, story, [hw["storyteller"]]),
+        (Role.story_editor, story_review, [hw["story_review"]]),
     ):
         for it in (items if items is not None else default):
             m.script(role, enc(it) if not isinstance(it, (Delay, Exception)) else it)
@@ -124,6 +125,7 @@ def test_happy_path_published(which, request):
         (Role.analyst, 1, StepStatus.ok),
         (Role.editor, 1, StepStatus.ok),
         (Role.storyteller, 1, StepStatus.ok),
+        (Role.story_editor, 1, StepStatus.ok),
     ]
     assert all(s.detail is None for s in trace.steps)
 
@@ -333,7 +335,7 @@ def test_partial_approval_publishes_only_approved(press):
     assert [c.claim_id for c in insight.claims] == ["c1"]
     c2_text = hw["analyst"]["claims"][1]["text"]
     assert c2_text not in insight.model_dump_json()
-    assert c2_text not in m.calls[-1][2]  # storyteller never saw it
+    assert c2_text not in next(c[2] for c in m.calls if c[0] == Role.storyteller)  # storyteller never saw it
     assert set(insight.evidence_event_ids) == set(hw["analyst"]["claims"][0]["evidence_event_ids"])
 
 
@@ -462,7 +464,7 @@ def story_variant(hw, **over):
         (lambda hw: story_variant(hw, analyst={"body": "Harbour Athletic made 99 pressures."}),
          "DIGIT_FORBIDDEN:analyst"),
         (lambda hw: story_variant(hw, analyst={"body": "They made {shots.invented} shots."}),
-         "UNKNOWN_FACT:shots.invented"),
+         "UNKNOWN_FACT:analyst:shots.invented"),
         (lambda hw: story_variant(hw, analyst={"body": "It is {score}."}), "FACT_NOT_IN_CLAIMS:score"),
         (lambda hw: story_variant(hw, casual={"body": "Pressing {pressures_opp_half.hba} and {window_s}."}),
          "CASUAL_TOO_MANY_NUMBERS"),
@@ -475,10 +477,10 @@ def story_variant(hw, **over):
 def test_bad_story_falls_back(press, mutate, code):
     cand, bundle = press
     _, hw = model_for(cand, bundle)
-    m, _ = model_for(cand, bundle, story=[mutate(hw)])
+    m, _ = model_for(cand, bundle, story=[mutate(hw), mutate(hw)])  # the repair repeats the mistake
     insight, trace = run(run_moment(cand, bundle, m))
     assert insight.outcome == Outcome.fallback
-    assert trace.steps[-1].role == Role.storyteller and trace.steps[-1].status == StepStatus.invalid
+    assert trace.steps[-1].role == Role.storyteller and trace.steps[-1].attempt == 2 and trace.steps[-1].status == StepStatus.invalid
     assert code in trace.steps[-1].detail
 
 
@@ -486,7 +488,9 @@ def test_story_referencing_rejected_claim_falls_back(press):
     cand, bundle = press
     _, hw = model_for(cand, bundle)
     rej = rejecting(hw, {"c2"})
-    m, _ = model_for(cand, bundle, analyst=[hw["analyst"]] * 2, editor=[rej, rej])  # story cites c1+c2
+    bad = copy.deepcopy(hw["storyteller"])
+    m, _ = model_for(cand, bundle, analyst=[hw["analyst"]] * 2, editor=[rej, rej],
+                     story=[bad, bad])  # story cites c1+c2
     insight, trace = run(run_moment(cand, bundle, m))
     assert insight.outcome == Outcome.fallback
     assert "CLAIM_NOT_APPROVED:c2" in trace.steps[-1].detail
@@ -513,8 +517,7 @@ def test_storyteller_input_has_no_events(press):
     cand, bundle = press
     m, _ = model_for(cand, bundle)
     run(run_moment(cand, bundle, m))
-    role, _, input_json = m.calls[-1]
-    assert role == Role.storyteller
+    input_json = next(c[2] for c in m.calls if c[0] == Role.storyteller)
     data = json.loads(input_json)
     assert "events" not in data and "bundle" not in data
     for e in bundle.events:
@@ -539,12 +542,12 @@ def test_storyteller_gets_only_facts_of_approved_claims(press):
         v["claim_ids"] = ["c1"]
     m, _ = model_for(cand, bundle, analyst=[hw["analyst"]] * 2, editor=[rej, rej], story=[story])
     run(run_moment(cand, bundle, m))
-    data = json.loads(m.calls[-1][2])
+    data = json.loads(next(c[2] for c in m.calls if c[0] == Role.storyteller))
     assert [f["key"] for f in data["facts"]] == ["pressures_opp_half.hba", "window_s"]
 
 
 def test_prompts_explain_the_placeholder_rule():
-    assert PROMPT_VERSION == "p3"
+    assert PROMPT_VERSION == "p4"
     for role in (Role.analyst, Role.storyteller, Role.single):
         text = load_prompt(role)
         assert "{pass_completion.nbr.frac}" in text and "{prev.pass_completion.nbr.frac}" in text
@@ -594,7 +597,7 @@ def test_check_analyst_codes(press):
         lambda d: d["claims"][0].update(evidence_event_ids=["e" * 500]))
     assert "DIGIT_FORBIDDEN:c1" in codes(lambda d: d["claims"][0].update(text="42 pressures"))
     assert "DIGIT_FORBIDDEN:c2" in codes(lambda d: d["claims"][1].update(text="Pressure at 58:59."))
-    assert "UNKNOWN_FACT:zzz.invented" in codes(lambda d: d["claims"][0].update(text="{zzz.invented} pressures"))
+    assert "UNKNOWN_FACT:c1:zzz.invented" in codes(lambda d: d["claims"][0].update(text="{zzz.invented} pressures"))
     assert "BAD_PLACEHOLDER:c1" in codes(lambda d: d["claims"][0].update(text="{Zzz} pressures"))
     assert "TOO_MANY_CLAIMS" in codes(lambda d: d.update(claims=d["claims"] * 2))
     assert "NO_OBSERVATION" in codes(lambda d: d["claims"][0].update(kind="interpretation"))
@@ -641,7 +644,7 @@ def test_check_story_codes(press):
     assert "DIGIT_FORBIDDEN:analyst" in codes(lambda d: d["variants"][0].update(title="7 presses"))
     assert "MARKUP_FORBIDDEN:analyst" in codes(lambda d: d["variants"][0].update(title="a > b"))
     assert "IDENTICAL_BODIES" in codes(lambda d: d["variants"][1].update(body=d["variants"][0]["body"]))
-    assert "NUMBER_WORD:twice" in codes(lambda d: d["variants"][0].update(body="Twice as many pressures."))
+    assert "NUMBER_WORD:analyst:twice" in codes(lambda d: d["variants"][0].update(body="Twice as many pressures."))
     # the source card's numbers are not a source for story text any more: only the claims' facts
     assert "FACT_NOT_IN_CLAIMS:pass_completion.nbr.pct" in codes(
         lambda d: d["variants"][1].update(body="{pass_completion.nbr.pct} of passes."))
@@ -723,7 +726,7 @@ def test_single_agent_shares_one_total_budget(press):
 
     class Clocked(FakeModelClient):
         async def generate(self, **kw):
-            clock[0] += 50.0
+            clock[0] += 70.0
             return await super().generate(**kw)
 
     _, hw = model_for(cand, bundle)
