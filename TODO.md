@@ -18,7 +18,7 @@ Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar
 - [x] Domain/API: eksik sonuç/oyuncu, devre-saat, seed, top sahipliği tutarlılığı, çift `match_id`, UTF-8 hataları; kilit dosyaları runtime/dev ayrımı; README doğruluğu ve taşınabilir kurulum.
 - [x] Web: `MatchInfo`; gecikmede canlılık (tek uçuşta istek); doğru metrik başlığı; "as of" eskilik işareti; gol/kart duyuruları; saha kontrastı; snapshot dışı kanıt işareti; okunur metin ve etiketler; 390 px skor çubuğu.
 - [x] Üç dalın birleştirilmesi, tam test + e2e, `reviewer` ile yeniden inceleme, `main`'e birleştirme (`c08f8fe`).
-- [ ] Düzeltme turu (`wip/story-review`): hikâye metninin Editor incelemesi + Storyteller düzeltme hakkı; sayı ifadeleri ("one up", "second goal", "brace"); "half of the pitch" yanlış retleri; pencere kırpma; fact anahtarı çakışması; web'de takılan istek, "as of" kontrastı, tablo adı; ajan şema sürümü 2.0.
+- [x] Düzeltme turu (`wip/story-review`, `main`'de): hikâye metninin Editor incelemesi + Storyteller düzeltme hakkı; sayı ifadeleri ("one up", "second goal", "brace"); "half of the pitch" yanlış retleri; pencere kırpma; fact anahtarı çakışması; web'de takılan istek, "as of" kontrastı, tablo adı; ajan şema sürümü 2.0.
 
 ## 2. Foundry model istemcisi (22 Ekim)
 

@@ -59,7 +59,7 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 | Tek-agent karşılaştırma yolu (aynı girdi, aynı denetim) | Tamam (ölçüm yok) | `src/workflow/single_agent.py` |
 | Public'e uygunluk: özel linkler, kuralların kopyası, ham çıktılar depodan çıkarıldı | Tamam | `.gitignore`, `AGENTS.md` |
 
-**Testler (21 Ekim, `main`):** backend 352, web 62, tarayıcı e2e 9/9, hepsi yeşil. `npm audit` 0 açık.
+**Testler (21 Ekim, `main`):** backend 507, web 71, tarayıcı e2e 9/9, hepsi yeşil. `npm audit` 0 açık.
 
 **Önemli kararlar ve neden:**
 - *Sayılar yer tutucuyla.* Önceki tasarımda model sayıları serbest metne yazıyor, kod sonradan doğrulamaya çalışıyordu; inceleme turları beş kez uydurma sayının geçtiğini buldu ("48 of 52 passes", yanlış skor). Yeni tasarımda model hiç rakam yazmıyor.
@@ -71,7 +71,7 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 
 - **Çalışan:** sentetik maç replay'i, gerçek API'den skor/metrik/şablon kartlar, sahte modelle çalışan agent pipeline'ı (iki an yayınlanıyor).
 - **`main`'e girdi:** yer tutucu tasarımı ve uçtan uca incelemenin düzeltmeleri (`wip/facts-v2`). Bağımsız inceleme engelleyici bulmadı; 8 iyileştirme bulgusu çıktı.
-- **Devam eden (`wip/story-review`):** Evidence Editor artık hikâye metnini de inceleyecek (inceleme, doğru sayıların etrafında yanlış cümle kurulabildiğini gösterdi: pencerelerin yer değiştirmesi, golü yanlış takıma yazma); Storyteller'a bir düzeltme hakkı; "one up", "second goal", "brace" gibi sayı ifadeleri; "their half of the pitch" gibi yanlış retler; pencere sınırının devre/kesit başına kırpılması; web'de hızlı ileri-geri sonrası takılan istek ve "as of" etiketinin kontrastı.
+- **`main`'e girdi (story-review turu):** Evidence Editor artık hikâye metnini de inceliyor (doğru sayıların etrafında yanlış cümle kurulmasını yakalamak için); Storyteller'a bir düzeltme hakkı; sayı ifadesi kuralları sadeleşti ("scored once", "no shots", "brace" reddedilir; "Once in possession", "no pressure", "front three" geçer); pencere devre/kesit başında kırpılıyor; web'de takılan istek ve "as of" kontrastı düzeldi. Bir an için model çağrısı: olağan 4, en kötü 8.
 - **Henüz yok — 1. aşama (geçti/kaldı) riski:**
   1. Gerçek yapay zekâ modeli yok (Microsoft Foundry bağlantısı bekleniyor) → çalışan üründe Microsoft teknolojisi yok.
   2. Agent içgörüleri ve analist/taraftar seçimi arayüzde görünmüyor.
@@ -79,13 +79,12 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 
 ## 5. Sırada ne var (ayrıntı: [TODO.md](../TODO.md))
 
-1. `wip/story-review`'u incelemeden geçirip `main`'e almak.
-2. **Foundry model istemcisi**: gerçek modelle iki anın uçtan uca denenmesi, maliyet ve gecikmenin ölçülmesi.
-3. **İçgörüleri ürüne taşımak**: `/insights` uç noktası, analist/taraftar seçimi, sonuç rozeti (yayınlandı / yedek kart / çekimser), kanıtın sahada vurgulanması.
-4. **Dağıtım ve CI**: tek container, Azure Container Apps, GitHub Actions.
-5. **Microsoft Agent Framework**: koordinatörü MAF workflow olarak sarmak.
-6. **Ölçümlü değerlendirme**: çok-agent vs tek-agent; sonuç ne çıkarsa dürüstçe raporlanacak.
-7. **Teslim**: geçmiş temizliği, İngilizce README/pitch, video, erken teslim (27 Ekim).
+1. **Foundry model istemcisi**: gerçek modelle iki anın uçtan uca denenmesi, maliyet ve gecikmenin ölçülmesi.
+2. **İçgörüleri ürüne taşımak**: `/insights` uç noktası, analist/taraftar seçimi, sonuç rozeti (yayınlandı / yedek kart / çekimser), kanıtın sahada vurgulanması.
+3. **Dağıtım ve CI**: tek container, Azure Container Apps, GitHub Actions.
+4. **Microsoft Agent Framework**: koordinatörü MAF workflow olarak sarmak.
+5. **Ölçümlü değerlendirme**: çok-agent vs tek-agent; sonuç ne çıkarsa dürüstçe raporlanacak.
+6. **Teslim**: geçmiş temizliği, İngilizce README/pitch, video, erken teslim (27 Ekim).
 
 ## 6. Ekipten karar/bilgi bekleyenler
 
