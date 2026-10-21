@@ -72,7 +72,7 @@ def correct(cand):
     return story(cand,
                  "Harbour Athletic scored at {t.e066} to make it {score}; Northbridge FC completed "
                  "{pass_completion.nbr.frac} passes, down from {prev.pass_completion.nbr.frac}.",
-                 "Harbour Athletic scored on the break to make it {score}.")
+                 "Harbour Athletic scored to make it {score}.")
 
 
 def client(cand, *, stories, reviews, analysts=None):
@@ -193,13 +193,13 @@ def test_story_editor_input(goal):
     data = json.loads(raw)
     assert data["team_names"]["nbr"] == "Northbridge FC"
     c3 = next(c for c in data["approved_claims"] if c["claim_id"] == "c3")
-    assert c3["template"] == C3 and c3["rendered"] == "Northbridge FC completed 2 of 7 passes, down from 21 of 21."
+    assert c3["kind"] == "observation" and c3["template"] == C3 and c3["rendered"] == "Northbridge FC completed 2 of 7 passes, down from 21 of 21."
     assert {f["key"] for f in data["facts"]} == {"t.e066", "score", "pass_completion.nbr.frac",
                                                   "prev.pass_completion.nbr.frac"}
     assert all(set(f) == {"key", "text", "meaning"} for f in data["facts"])
     v = next(v for v in data["variants"] if v["persona"] == "casual")
-    assert v["body_template"] == "Harbour Athletic scored on the break to make it {score}."
-    assert v["body"] == "Harbour Athletic scored on the break to make it 0-1."
+    assert v["body_template"] == "Harbour Athletic scored to make it {score}."
+    assert v["body"] == "Harbour Athletic scored to make it 0-1."
     assert "events" not in data and "bundle" not in data
 
 
@@ -216,7 +216,7 @@ def test_check_story_review_codes(goal):
     def codes(mut):
         d = review(cand)
         mut(d)
-        return check_story_review(StoryReview.model_validate(d), st, cand)
+        return check_story_review(StoryReview.model_validate(d), cand)
 
     assert codes(lambda d: None) == ()
     assert "ID_MISMATCH:snapshot_id" in codes(lambda d: d.update(snapshot_id="x@1"))
@@ -226,9 +226,9 @@ def test_check_story_review_codes(goal):
     assert "REPAIR_HINT_MISSING" in codes(lambda d: d["reviews"][0].update(verdict="rejected"))
     assert "REPAIR_HINT_UNEXPECTED" in codes(lambda d: d.update(repair_hint="fix"))
     d = review(cand, "casual")
-    assert check_story_review(StoryReview.model_validate(d), st, cand) == ()
+    assert check_story_review(StoryReview.model_validate(d), cand) == ()
     d["repair_hint"] = "  "
-    assert check_story_review(StoryReview.model_validate(d), st, cand) == ("REPAIR_HINT_MISSING",)
+    assert check_story_review(StoryReview.model_validate(d), cand) == ("REPAIR_HINT_MISSING",)
 
 
 def test_happy_path_makes_four_calls(goal):
@@ -237,3 +237,9 @@ def test_happy_path_makes_four_calls(goal):
     insight, _ = run(run_moment(cand, bundle, m))
     assert insight.outcome == Outcome.published and len(m.calls) == 4
     assert copy.deepcopy(insight) == insight
+
+
+def test_repair_is_documented_in_the_writer_prompts():
+    st = load_prompt(Role.storyteller)
+    assert "repair" in st and "STORY_REJECTED" in st and "repair_hint" in st and "previous_output" in st
+    assert "CODE:<claim_id>:<detail>" in load_prompt(Role.analyst)

@@ -188,3 +188,56 @@ def test_clock_keys_are_unique_and_odd_ids_never_raise(synth, cards):
     assert len(keys) == len(set(keys))
     assert [k for k in keys if k.startswith("t.")] == ["t.x_1"] and all(len(k) <= 64 for k in keys)
     assert [f.event_ids for f in got if f.key == "t.x_1"] == [("x.1",)]  # first one wins
+
+
+# ---------------------------------------------------------------- fix round 2: clamped start is inclusive
+
+
+def _expected_counts(meta, evs, start_inclusive, end, period):
+    from domain.metrics import team_metrics
+    from domain.moment import events_in_window
+    win = events_in_window(evs, period, start_inclusive - 1, end)
+    return {(m.name.value, t.id): m for t in meta.teams for m in team_metrics(t.id, t.side, win)}
+
+
+def _assert_counts(d, expected):
+    for (name, tid), m in expected.items():
+        if name == "pass_completion":
+            if m.denominator:
+                assert d[f"pass_completion.{tid}.frac"].text == f"{m.numerator} of {m.denominator}"
+        else:
+            assert d[f"{name}.{tid}"].text == str(int(m.value or 0)), (name, tid)
+
+
+def test_event_exactly_at_the_period_start_is_in_the_window(synth, cards):
+    meta, evs, card, seq = press_inputs(synth, cards)
+    shift = 3_592_000 - 2_720_000
+    evs = [e.model_copy(update={"event_time_ms": e.event_time_ms - shift}) for e in evs]
+    meta = meta.model_copy(update={"segment_start_ms": 2_600_000})
+    target = next(e for e in evs if e.type.value == "pressure" and e.team_id == "hba"
+                  and e.event_time_ms > 2_700_000)
+    evs = [e.model_copy(update={"event_time_ms": 2_700_000}) if e is target else e for e in evs]
+    d = {f.key: f for f in build_facts(meta, evs, card, seq)}
+    assert target.event_id in d["pressures.hba"].event_ids
+    _assert_counts(d, _expected_counts(meta, evs, 2_700_000, evs[-1].event_time_ms, 2))
+
+
+def test_event_exactly_at_the_segment_start_is_in_the_window(synth, cards):
+    meta, evs, card, seq = press_inputs(synth, cards)
+    target = next(e for e in evs if e.type.value == "pressure" and e.team_id == "hba"
+                  and e.event_time_ms > 3_560_000)
+    evs = [e.model_copy(update={"event_time_ms": 3_560_000}) if e is target else e for e in evs]
+    meta = meta.model_copy(update={"segment_start_ms": 3_560_000})
+    d = {f.key: f for f in build_facts(meta, evs, card, seq)}
+    assert target.event_id in d["pressures.hba"].event_ids
+    _assert_counts(d, _expected_counts(meta, evs, 3_560_000, evs[-1].event_time_ms, 2))
+
+
+def test_facts_agree_with_the_source_card_metrics(synth, cards):
+    for kind, (cand, _) in cards.items():
+        d = facts_of(synth, cards, kind)
+        for m in cand.source_card.metrics:
+            if m.name.value == "pass_completion":
+                assert m.denominator is None or d[f"pass_completion.{m.team_id}.den"].text == str(m.denominator)
+            else:
+                assert d[f"{m.name.value}.{m.team_id}"].text == str(int(m.value or 0)), (kind, m.name)

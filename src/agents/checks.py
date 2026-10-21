@@ -39,26 +39,36 @@ COUNTED_NOUNS = (r"goals?|cards?|corners?|saves?|passes|pass|shots?|chances?|pre
                  r"interceptions?|duels?|fouls?|touch(?:es)?|attempts?|turnovers?|recover(?:y|ies)|wins?")
 # fixed football phrases whose words would otherwise look like numbers (case-insensitive)
 EXEMPT_PHRASES = ("final third", "middle third", "attacking third", "defensive third", "one-two",
-                  "half-space", "half-time", "half time", "back four", "back three")
+                  "half-space", "half-time", "half time", "back four", "back three", "back five", "front three",
+                  "front two", "third-man run", "double pivot", "double press")
 
 _EXEMPT = re.compile(r"(?<![\w-])(?:" + "|".join(re.escape(p) for p in EXEMPT_PHRASES) + r")(?![\w-])", re.I)
 _WORD = re.compile(r"\b(" + "|".join(dict.fromkeys(NUMBER_WORDS)) + r")\b", re.I)
-_COUNT_WORD = re.compile(r"\b(one|single|both|no)\s+(?:" + COUNTED_NOUNS + r")\b", re.I)
-_ONE_DIRECTION = re.compile(r"\b(one)\s+(?:up|down|ahead|behind|nil)\b", re.I)
-_ONE_AT_END = re.compile(r"\b(?:just|only)\s+(one)\b(?=\s*(?:[.,;:!?)\u2014]|$))", re.I)
+_PLURAL_NOUNS = (r"goals|cards|corners|saves|passes|shots|chances|pressures|presses|minutes|seconds|tackles|"
+                 r"interceptions|duels|fouls|touches|attempts|turnovers|recoveries|wins")
+_COUNT_WORD = re.compile(r"\b(one|single|both)\s+(?:" + COUNTED_NOUNS + r")\b", re.I)
+_NO_PLURAL = re.compile(r"\b(no)\s+(?:" + _PLURAL_NOUNS + r")\b", re.I)  # "no pressure", "no chance" are idioms
+_ONE_DIRECTION = re.compile(r"\b(one)(?:\s+|-)(?:up|down|ahead|behind|nil)\b", re.I)
+_ONE_AT_END = re.compile(r"\b(?:just|only)\s+(one)\b(?=\s*(?:[.,;:!?)—]|$))", re.I)
+_ONE_OF_THEIR = re.compile(r"\b(one)\s+of\s+(?:the|their|his|her|its|our|those|these)\s+(?:\w+\s+)?(?:"
+                           + COUNTED_NOUNS + r")\b", re.I)
+_LONE = re.compile(r"\b(lone)\s+(?:" + COUNTED_NOUNS + r")\b", re.I)
+_NONE_PAIR = re.compile(r"\b(none)\s+of\b|\ba\s+(pair)\s+of\b", re.I)
 _ORDINAL_NOUNS = (r"goals?|cards?|shots?|passes|pass|chances?|corners?|saves?|tackles?|press(?:es)?|"
                   r"pressures?|minutes?")
 _ORDINAL = re.compile(r"\b(first|second)\s+(?:" + _ORDINAL_NOUNS + r")\b", re.I)
 _ALWAYS = re.compile(r"(?<![\w-])(brace|hat[- ]trick)(?![\w-])", re.I)
 _ONCE = re.compile(r"\bonce\b", re.I)
-_ONCE_COUNT_NEXT = {"more", "again", "a", "per", "every", "or", "and", "twice", "in", "each"}
+_ONCE_FREQUENCY_NEXT = {"more", "again"}
 _HALF = re.compile(r"\bhalf\b", re.I)
-_HALF_BEFORE_FRACTION = {"a", "by", "one"}
-_HALF_FOLLOW_FRACTION = {"of", "the", "as", "their", "his", "her", "its", "a", "an"}
+_HALF_BEFORE_FRACTION = {"a", "by", "one", "in"}
 _HALF_PITCH_BEFORE = {"their", "our", "his", "her", "its", "own", "opposition", "opponent", "opponents",
                       "opposing", "opposite", "other", "attacking", "defensive", "home", "away",
                       "first", "second"}
 _HALF_PITCH_AFTER = re.compile(r"\s+of\s+the\s+(?:pitch|field|park)\b", re.I)
+_HALF_FRACTION_AFTER = re.compile(
+    r"\s+(?:(?:of\s+)?(?:the|their|his|her|its|our|those|these)\s+(?:\w+\s+)?(?:" + COUNTED_NOUNS + r")\b"
+    r"|of\s+(?:" + COUNTED_NOUNS + r")\b|as\s+(?:many|much|often|likely)\b)", re.I)
 
 
 def safe_id(value: str) -> str:
@@ -67,41 +77,47 @@ def safe_id(value: str) -> str:
 
 
 def _fraction_half(text: str, team_tokens: frozenset[str]) -> list[str]:
-    """'half' as a fraction ('half of the passes', 'a half', 'by half'); pitch/period halves are fine."""
+    """'half' as a fraction ('half of the passes', 'a half', 'by half', 'in half'); pitch/period
+    halves and hyphenated compounds ('half-volley') are fine."""
     out = []
     for m in _HALF.finditer(text):
-        prev = re.search(r"([\w'\u2019]+)\s*$", text[: m.start()])
-        nxt = re.match(r"\s+(\w+)", text[m.end():])
-        before = prev.group(1).lower().replace("\u2019", "'") if prev else ""
-        after = nxt.group(1).lower() if nxt else ""
-        if (before in _HALF_PITCH_BEFORE or before in team_tokens or before.endswith(("'s", "s'"))
-                or _HALF_PITCH_AFTER.match(text[m.end():])):
+        if text[m.end(): m.end() + 1] == "-" or text[max(0, m.start() - 1): m.start()] == "-":
             continue
-        if before in _HALF_BEFORE_FRACTION or after in _HALF_FOLLOW_FRACTION:
+        prev = re.search(r"([\w'’]+)\s*$", text[: m.start()])
+        before = prev.group(1).lower().replace("’", "'") if prev else ""
+        rest = text[m.end():]
+        if (before in _HALF_PITCH_BEFORE or before in team_tokens or before.endswith(("'s", "s'"))
+                or _HALF_PITCH_AFTER.match(rest)):
+            continue
+        if before in _HALF_BEFORE_FRACTION or _HALF_FRACTION_AFTER.match(rest):
             out.append("half")
     return out
 
 
 def _once(text: str) -> list[str]:
+    """'once' as a frequency adverb ('scored once.', 'once more', 'once again'); the conjunction
+    ('once the ball went wide') and 'at once' are fine."""
     out = []
     for m in _ONCE.finditer(text):
-        before = text[: m.start()].rstrip()
-        nxt = re.match(r"\s+(\w+)", text[m.end():])
+        prev = re.search(r"(\w+)\s*$", text[: m.start()])
+        if prev and prev.group(1).lower() == "at":
+            continue
+        rest = text[m.end():]
+        nxt = re.match(r"\s+(\w+)", rest)
         after = nxt.group(1).lower() if nxt else ""
-        if before.lower().endswith("at"):
-            continue
-        clause_start = not before or before[-1] in ".!?;:,\u2014"
-        if clause_start and after and after not in _ONCE_COUNT_NEXT:
-            continue
-        out.append("once")
+        at_end = re.match(r"\s*(?:[.,;:!?)—]|$)", rest) is not None
+        if after in _ONCE_FREQUENCY_NEXT or re.match(r"\s+in\s+a\s+while\b", rest, re.I) or (
+                at_end and prev is not None):
+            out.append("once")
     return out
 
 
 def number_words_in(text: str, team_tokens: frozenset[str] = frozenset()) -> list[str]:
     text = _EXEMPT.sub(" ", text)
     found = [m.group(1).lower() for m in _WORD.finditer(text)]
-    for rx in (_COUNT_WORD, _ONE_DIRECTION, _ONE_AT_END, _ORDINAL, _ALWAYS):
+    for rx in (_COUNT_WORD, _NO_PLURAL, _ONE_DIRECTION, _ONE_AT_END, _ONE_OF_THEIR, _LONE, _ORDINAL, _ALWAYS):
         found += [re.sub(r"[ ]", "-", m.group(1).lower()) for m in rx.finditer(text)]
+    found += [(m.group(1) or m.group(2)).lower() for m in _NONE_PAIR.finditer(text)]
     found += _once(text)
     found += _fraction_half(text, team_tokens)
     return found
@@ -247,7 +263,7 @@ def check_story(story: StoryOutput, approved_claims: Sequence[Claim], candidate:
     return _dedupe(codes)
 
 
-def check_story_review(review: StoryReview, story: StoryOutput, candidate: MomentCandidate) -> tuple[str, ...]:
+def check_story_review(review: StoryReview, candidate: MomentCandidate) -> tuple[str, ...]:
     codes: list[str] = []
     if review.candidate_id != candidate.candidate_id:
         codes.append("ID_MISMATCH:candidate_id")

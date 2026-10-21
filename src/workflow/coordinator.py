@@ -182,7 +182,7 @@ async def _story_phase(candidate, bundle, model, timeouts: Timeouts, rec: Record
             ed_payload = {
                 "candidate_id": candidate.candidate_id, "snapshot_id": candidate.snapshot_id,
                 "team_names": bundle.team_names,
-                "approved_claims": [{"claim_id": c.claim_id, "template": c.text,
+                "approved_claims": [{"claim_id": c.claim_id, "kind": c.kind.value, "template": c.text,
                                      "rendered": render(c.text, bundle.facts)} for c in approved],
                 "facts": story_payload["facts"],
                 "variants": [{"persona": v.persona.value, "claim_ids": list(v.claim_ids),
@@ -195,7 +195,7 @@ async def _story_phase(candidate, bundle, model, timeouts: Timeouts, rec: Record
             if rtext is None:
                 return fail()
             review = parse(StoryReview, rtext)
-            rcodes = ("SCHEMA_INVALID",) if review is None else check_story_review(review, story, candidate)
+            rcodes = ("SCHEMA_INVALID",) if review is None else check_story_review(review, candidate)
             if rcodes:
                 rec.done(Role.story_editor, review_n, StepStatus.invalid, rcodes)
                 return fail()  # never publish an unreviewed story

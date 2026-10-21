@@ -12,12 +12,13 @@ from contracts.agents import Fact
 from contracts.api import Card, MetricName, MetricValue
 from contracts.events import MatchEvent, ScenarioMeta
 from domain.cards import fmt_clock
+from domain.ingest import PERIOD_2_START_MS
 from domain.metrics import team_metrics
 from domain.moment import events_in_window, period_start_ms, possession_summary, round_half_up
 from domain.snapshot import score_after, visible_events
 
 WINDOW_S = 60
-PERIOD_START_MS = {1: 0, 2: 2_700_000}
+PERIOD_START_MS = {1: 0, 2: PERIOD_2_START_MS}
 
 _COUNT_DESC = {
     MetricName.passes_attempted: "Passes attempted by {team}",
@@ -36,8 +37,8 @@ def _key_part(raw: str) -> str:
 
 
 def _window_facts(prefix: str, label: str, teams, vis: Sequence[MatchEvent], period: int,
-                  start_ms: int, end_ms: int) -> list[Fact]:
-    rng = f"{fmt_clock(start_ms)}-{fmt_clock(end_ms)}"
+                  start_ms: int, end_ms: int, shown_start_ms: int | None = None) -> list[Fact]:
+    rng = f"{fmt_clock(start_ms if shown_start_ms is None else shown_start_ms)}-{fmt_clock(end_ms)}"
     win = events_in_window(vis, period, start_ms, end_ms)
     out: list[Fact] = []
     for team in teams:
@@ -81,13 +82,17 @@ def build_facts(meta: ScenarioMeta, events: Sequence[MatchEvent], card: Card,
     names = {t.id: t.name for t in teams}
     end = trigger.event_time_ms
     nominal = PERIOD_START_MS.get(trigger.period, 0)
-    start = max(end - WINDOW_S * 1000, nominal, meta.segment_start_ms)  # never before the period/segment
+    floor = max(nominal, meta.segment_start_ms)
+    clamped = end - WINDOW_S * 1000 < floor
+    start = floor if clamped else end - WINDOW_S * 1000  # never before the period/segment
     window_s = end // 1000 - start // 1000  # seconds spanned by the shown range
-    facts: list[Fact] = _window_facts("", "", teams, vis, trigger.period, start, end)
+    # domain windows are (start, end]; a clamped start is a real boundary, so include an event at it
+    facts: list[Fact] = _window_facts("", "", teams, vis, trigger.period, start - 1 if clamped else start,
+                                      end, shown_start_ms=start)
 
     prev_start = start - WINDOW_S * 1000  # only when a full previous window exists
     first = period_start_ms(vis, trigger.period)
-    if first is not None and prev_start >= first:
+    if not clamped and first is not None and prev_start >= first:
         facts += _window_facts("prev.", "Previous window: ", teams, vis, trigger.period, prev_start, start)
 
     score, goal_ids = score_after(meta, vis)

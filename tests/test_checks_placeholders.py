@@ -110,7 +110,7 @@ def test_unknown_fact_prev_window_missing_for_this_moment(press):
 
 @pytest.mark.parametrize("word", [
     "two", "Twenty", "ninety", "hundred", "halves", "double", "doubled", "twice", "triple", "tripled",
-    "third", "thirds", "quarter", "quarters", "tenth", "dozen", "couple", "handful", "zero", "nil", "once",
+    "third", "thirds", "quarter", "quarters", "tenth", "dozen", "couple", "handful", "zero", "nil",
 ])
 def test_number_words_rejected(press, word):
     assert f"NUMBER_WORD:c1:{word.lower()}" in one(press, f"Harbour pressed {word} time.")
@@ -331,7 +331,8 @@ def test_once_as_conjunction_or_at_once_passes(press, text):
 
 
 @pytest.mark.parametrize("text", [
-    "Harbour won it once.", "Harbour scored once more.", "They pressed once a minute.",
+    "Harbour won it once.", "Harbour scored once more.", "They won it once again.", "Harbour scored once, then faded.",
+    "It happened once in a while.",
 ])
 def test_once_as_a_count_fails(press, text):
     assert "NUMBER_WORD:c1:once" in words(press, text)
@@ -345,3 +346,62 @@ def test_codes_name_the_claim_without_cross_claim_dedupe(press):
                     claim("Harbour pressed twice {nope.x}.", cid="c2", kind=ClaimKind.interpretation))
     assert {"NUMBER_WORD:c1:twice", "NUMBER_WORD:c2:twice", "UNKNOWN_FACT:c1:nope.x",
             "UNKNOWN_FACT:c2:nope.x"} <= set(codes)
+
+
+# ---------------------------------------------------------------- fix round 2: fewer false rejections
+
+
+@pytest.mark.parametrize("text", [
+    "Once in possession, Harbour ran.", "Harbour pressed once the ball went wide.",
+    "Harbour lost the ball once Northbridge FC closed in.", "A side who had once looked passive.",
+    "Harbour pressed at once.",
+])
+def test_once_conjunction_allowed_anywhere(press, text):
+    assert words(press, text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "A half-volley dropped wide.", "A half-chance came.", "Pressed before half-time.",
+    "Late in the half Harbour pressed.", "Harbour pressed in the half as Northbridge FC tired.",
+    "Harbour pressed in the first half of the match.",
+])
+def test_half_compounds_and_pitch_half_allowed(press, text):
+    assert words(press, text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "Harbour won half of the passes.", "Half the shots missed.", "Harbour won half of their duels.",
+    "They had it in half.", "Harbour pressed half as often.", "Harbour won by half.", "A half.",
+])
+def test_half_fraction_rejected(press, text):
+    assert "NUMBER_WORD:c1:half" in words(press, text)
+
+
+@pytest.mark.parametrize("text", [
+    "Harbour were under no pressure.", "There was no pressure.", "Harbour had no chance to settle.",
+    "No way through.", "There was no time.", "No one moved.",
+])
+def test_no_idioms_allowed(press, text):
+    assert words(press, text) == []
+
+
+@pytest.mark.parametrize("text", ["They had no shots.", "No passes were completed.", "There were no goals."])
+def test_no_plural_counted_noun_rejected(press, text):
+    assert "NUMBER_WORD:c1:no" in words(press, text)
+
+
+@pytest.mark.parametrize("phrase", [
+    "front three", "front two", "back five", "back four", "back three", "third-man run", "double pivot",
+    "double press", "one-two",
+])
+def test_more_exempt_football_terms(press, phrase):
+    assert words(press, f"Harbour Athletic used the {phrase} well.") == []
+
+
+@pytest.mark.parametrize("text,word", [
+    ("They pressed in half.", "half"), ("Harbour went one-up.", "one"), ("A lone shot came.", "lone"),
+    ("None of them connected.", "none"), ("A pair of tackles followed.", "pair"),
+    ("One of their passes failed.", "one"),
+])
+def test_further_count_phrases_rejected(press, text, word):
+    assert f"NUMBER_WORD:c1:{word}" in words(press, text)
