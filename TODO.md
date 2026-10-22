@@ -55,10 +55,11 @@ Tarihler İstanbul saatiyle. Teslim sonu **28 Ekim 2026 09:59** (resmî kurallar
 
 ## 7. Teslim (26–27 Ekim)
 
-- [x] Yayın: public depo `gokaysari/match-lens`; yalnız `main`, yerel geliştirme geçmişinden temizlenmiş bir kopyadan push edilir (yerel araç dosyaları, özel araştırma ve ham çıktılar hiç yayınlanmaz; yazar kimliği gokaysari999@gmail.com).
+- [x] Yayın: GitHub deposu `gokaysari/match-lens` (22 Ekim'den beri **private**); yalnız `main`, yerel geliştirme geçmişinden temizlenmiş bir kopyadan push edilir (yerel araç dosyaları, özel araştırma ve ham çıktılar hiç yayınlanmaz; yazar kimliği gokaysari999@gmail.com).
 - [ ] İngilizce: README (pitch, kurulum, test erişimi), `docs/` (mimari, değerlendirme sonuçları, sınırlamalar); bu dosya ya çevrilir ya da depodan çıkarılır.
 - [ ] < 2 dakikalık video (problem → replay + persona → kanıt zinciri → hata toparlama → ölçüm ve Microsoft stack).
 - [ ] Ölçülmemiş iddia yok ("real time", "hallucination-free" vb.); resmî Microsoft/Premier League ürünü izlenimi yok; sayı denetiminin sınırı belgelenir.
+- [ ] Depoyu yeniden **public** yap (kurallar §4.4 public depo istiyor) — teslimden önce, son kontrolden sonra.
 - [ ] Son kontrol ve 27 Ekim'de erken teslim.
 
 ## Backlog (engelleyici değil)

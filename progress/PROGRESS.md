@@ -89,7 +89,7 @@ Ayrıca önerilenler: oyuncu etiketleme, pas kalitesi/mesafesi, hız metrikleri,
 ## 6. Ekipten karar/bilgi bekleyenler
 
 - **Foundry erişimi:** Azure aboneliği, `az login`, proje endpoint'i ve model dağıtım adı (2. adımın ön şartı).
-- **Depo:** public `gokaysari/match-lens` (yalnız `main`). Takım arkadaşının yazma yetkisi için GitHub kullanıcı adı gerekiyor.
+- **Depo:** `gokaysari/match-lens` şu an **private** (yalnız `main`); kurallar public depo istediği için teslimden önce public yapılacak. Takım arkadaşı private depoyu ancak davetle görebilir: GitHub kullanıcı adı gerekiyor.
 - **Lisans sahibi adı:** `LICENSE` şu an tek kişinin adını taşıyor; ekip adı veya iki isim istenebilir.
 - **Temsilci:** teslimi kimin yapacağı.
 - **İş bölümü:** iki kişi arasında 2–7. adımların paylaşımı.
